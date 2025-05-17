@@ -1,0 +1,1462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SideQuest MVP Preview</title>
+    <link href="https://fonts.googleapis.com/css2?family=UnifrakturCook:wght@700&family=IM+Fell+English+SC&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
+    <style>
+        /* Habituality Theme & Base Styles */
+        :root {
+            --primary-bg: #2c3e50;
+            --secondary-bg: #34495e;
+            --tertiary-bg: #4a6179;
+            --item-bg: #56708b;
+            --item-hover-bg: #67809f;
+            --item-completed-bg: #3e5062;
+            --text-light: #ecf0f1;
+            --text-muted: #bdc3c7;
+            --accent-red: #e74c3c;
+            --accent-green: #2ecc71;
+            --accent-blue: #3498db;
+            --accent-teal: #1abc9c;
+            --accent-purple: #9b59b6;
+            --accent-orange: #e67e22;
+            --border-color: #7f8c8d;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif; /* Habituality font */
+            display: flex;
+            background-color: var(--primary-bg); 
+            color: var(--text-light); 
+            margin: 0;
+            padding-bottom: 70px; /* Add padding to prevent overlap with fixed bottom nav */
+            min-height: 100vh;
+            flex-direction: column;
+            align-items: center;
+        }
+        h1 { /* Main Title */
+            font-family: 'UnifrakturCook', 'IM Fell English SC', serif;
+            font-size: 2.5em; /* Slightly smaller */
+            color: #4a4a4a; /* Darker, less glowing title */
+            /* text-shadow: 2px 2px 8px #6b3e26, 0 0 10px #fff2b2; */
+            text-shadow: 1px 1px 2px #ccc;
+            /* border: 4px solid #ffe066; */
+            /* border-radius: 18px; */
+            /* background: rgba(60, 40, 10, 0.7); */
+            padding: 10px 20px;
+            /* display: inline-block; */
+            margin: 0 0 20px 0; /* Adjusted margin */
+            /* box-shadow: 0 0 24px #ffe06699; */
+            text-align: center;
+            width: 100%;
+        }
+
+        #top-section {
+            display: flex;
+            flex-direction: column; /* Stack game and controls vertically */
+            align-items: center; /* Center items */
+            gap: 10px;
+            margin-bottom: 20px;
+            width: 100%;
+        }
+
+        #game-container {
+            border: 2px solid var(--text-light);
+            background-color: var(--primary-bg);
+            border-radius: 5px;
+            width: 100%; 
+            max-width: 320px; 
+            height: 176px; 
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            margin-bottom: 10px;
+            /* Ensure no old background/display properties interfere */
+            /* background: #fff; */
+            /* display: flex; */
+            /* justify-content: center; */
+            /* align-items: center; */
+        }
+
+        #main-content-area {
+            display: flex;
+            flex-direction: column; 
+            align-items: center;
+            width: 100%;
+            max-width: 800px; 
+            padding: 20px; /* Added padding here */
+        }
+        
+        .panel {
+            background-color: var(--tertiary-bg);
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 3px 7px rgba(0,0,0,0.15);
+            margin-bottom: 15px;
+        }
+
+        #character-customization-panel h2 {
+            font-family: 'IM Fell English SC', serif;
+            color: #555;
+            margin-top: 0;
+            margin-bottom: 15px;
+            font-size: 1.5em;
+            text-align: center;
+        }
+        
+        #character-customization-panel label {
+            font-family: 'IM Fell English SC', serif;
+            color: #555; /* Darker label color */
+            font-size: 1.1em;
+            margin-top: 8px;
+            display: block; /* Ensure labels take full width or stack properly */
+        }
+        #character-customization-panel select, 
+        #character-customization-panel input[type='text'] { /* Assuming text input might be added later */
+            font-family: 'IM Fell English SC', serif;
+            font-size: 1em;
+            background: #f9f9f9; /* Slightly off-white background */
+            color: #333;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            padding: 8px 10px;
+            margin-bottom: 12px;
+            margin-top: 4px;
+            box-shadow: inset 0 1px 2px rgba(0,0,0,0.05);
+            width: calc(100% - 22px); /* Adjust width considering padding and border */
+        }
+
+        #character-customization-panel #direction-controls {
+            margin-top: 10px;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+        #character-customization-panel #pose-select-container {
+            text-align: center;
+        }
+
+
+        #task-management-area {
+            width: 100%;
+            /* max-width: 900px; /* Adjusted to accommodate columns potentially */
+        }
+
+        #task-view-area {
+            width: 100%; /* Take full width of its parent */
+            /* Removed flex styles as it's now a container for one active tab at a time */
+        }
+
+        .tab-pane {
+            display: none; /* Hidden by default */
+            width: 100%;
+            min-height: 200px; 
+            background-color: var(--tertiary-bg); /* Use theme color for tab content background */
+            padding: 20px;
+            border-radius: 8px;
+            /* border: 1px solid #ddd; */ /* Remove old border */
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05); /* Keep a subtle shadow or adjust if needed */
+            margin-bottom: 20px; 
+        }
+        .tab-pane.active {
+            display: block; /* Show active tab */
+        }
+        
+        .tab-pane h2 {
+            font-family: 'IM Fell English SC', serif;
+            color: #555;
+            margin-top: 0;
+            margin-bottom: 15px;
+            font-size: 1.3em;
+            text-align: center;
+        }
+
+        #task-form, #task-list-container {
+            background: #ffffff;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            max-width: 700px;
+            margin: 0 auto 20px auto;
+            padding: 20px;
+            color: #333;
+        }
+        #task-form input[type='text'], 
+        #task-form textarea {
+            font-family: 'IM Fell English SC', serif;
+            font-size: 1em;
+            background: #f9f9f9;
+            color: #333;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            padding: 8px 10px;
+            margin-bottom: 10px;
+            margin-top: 4px;
+            box-shadow: inset 0 1px 2px rgba(0,0,0,0.05);
+            width: calc(100% - 22px); /* Full width minus padding/border */
+        }
+        #task-form textarea {
+            min-height: 60px;
+            resize: vertical;
+        }
+
+
+        #task-list-container h2 {
+            color: #555;
+            font-family: 'IM Fell English SC', serif;
+            margin-top: 0;
+            margin-bottom: 15px;
+            font-size: 1.5em;
+        }
+        #task-list ul {
+            list-style-type: none;
+            padding: 0;
+        }
+        #task-list li {
+            background: #f9f9f9; /* Lighter item background */
+            border: 1px solid #eee;
+            border-radius: 6px;
+            color: #333;
+            padding: 12px 15px;
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+        }
+        #task-list li.completed .task-details {
+            text-decoration: line-through;
+            color: #999; /* Lighter color for completed tasks */
+        }
+        #task-list li .task-details .notes {
+            font-size: 0.9em;
+            color: #777;
+            margin-top: 4px;
+        }
+        
+        button, .button { /* General button style from Habituality */
+            background-color: var(--accent-blue);
+            color: white;
+            padding: 10px 15px;
+            border: none; /* Habituality buttons have no border */
+            border-radius: 4px; /* Habituality border-radius */
+            cursor: pointer;
+            font-size: 1em;
+            transition: background-color 0.2s ease, transform 0.1s ease;
+        }
+        button:hover, .button:hover {
+            background-color: #2980b9; /* Darker blue from Habituality */
+            box-shadow: 0 2px 4px rgba(0,0,0,0.15); /* Keep existing shadow if desired */
+        }
+         button:active, .button:active {
+            transform: scale(0.95);
+        }
+        
+        /* Specific Button Adjustments - ensure these override general button styles */
+        #open-customization-btn, #open-task-form-btn {
+            background-color: var(--accent-teal) !important; /* Use important if necessary or ensure selector specificity */
+            color: white; /* Ensure text color contrasts */
+             /* padding: 10px 15px; Default from button */
+             /* border: none; Default from button */
+             /* border-radius: 4px; Default from button */
+        }
+        #open-customization-btn:hover, #open-task-form-btn:hover {
+            background-color: #16a085 !important; /* Darker teal */
+        }
+
+        .loader {
+            border: 5px solid #e0e0e0; /* Lighter loader */
+            border-top: 5px solid #7777d8; /* Accent color for loader */
+            border-radius: 50%;
+            width: 30px; /* Smaller loader */
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        #error-message {
+            color: #c00; /* Standard error color */
+            margin-top: 10px;
+            text-align: center;
+            width: 100%;
+        }
+
+        #open-customization-btn {
+            margin-bottom: 20px; /* Space below the button */
+        }
+
+        /* Modal Styles */
+        #character-customization-panel.modal {
+            display: none; /* Hidden by default */
+            position: fixed; 
+            z-index: 1000; /* Sit on top */
+            left: 0;
+            top: 0;
+            width: 100%; 
+            height: 100%;
+            overflow: auto; /* Enable scroll if needed */
+            background-color: rgba(0,0,0,0.4); /* Black w/ opacity for backdrop */
+        }
+
+        .modal-content {
+            background-color: var(--secondary-bg); /* Use theme color */
+            color: var(--text-light); /* Ensure text is light */
+            margin: 10% auto; 
+            padding: 20px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            width: 80%;
+            max-width: 500px; /* Habituality max-width */
+            position: relative;
+        }
+
+        .close-btn {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            position: absolute;
+            top: 10px;
+            right: 20px;
+        }
+
+        .close-btn:hover,
+        .close-btn:focus {
+            color: black;
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        #open-task-form-btn {
+            display: block; /* Make it a block to center it with margin auto */
+            margin: 0 auto 20px auto; /* Center button above task columns */
+        }
+
+        /* Generic Modal Styles - applied to both customization and task form */
+        .modal {
+            display: none; 
+            position: fixed; 
+            z-index: 1000; /* Sit on top */
+            left: 0;
+            top: 0;
+            width: 100%; 
+            height: 100%; 
+            overflow: auto; 
+            background-color: rgba(0,0,0,0.6); 
+        }
+
+        #bottom-tab-nav {
+            display: flex;
+            justify-content: space-around; /* Distribute buttons evenly */
+            /* margin-top: 20px; */ /* No longer needed with fixed positioning */
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            width: 100%;
+            background-color: var(--secondary-bg); /* Dark theme nav */
+            padding: 10px 0;
+            box-shadow: 0 -2px 5px rgba(0,0,0,0.2); /* Adjusted shadow for dark theme */
+            z-index: 90;
+        }
+
+        .tab-link {
+            background-color: transparent;
+            color: var(--text-muted);
+            padding: 10px 15px;
+            border: none; /* Remove all borders first */
+            border-top: 3px solid transparent; /* For active indicator, Habituality style */
+            cursor: pointer;
+            font-size: 0.9em; /* Habituality tab font size */
+            transition: color 0.2s, border-color 0.2s;
+            flex-grow: 1;
+            text-align: center;
+            font-family: 'Arial', sans-serif; /* Match body font */
+        }
+
+        .tab-link.active {
+            color: var(--accent-teal); /* Active tab text color */
+            border-top-color: var(--accent-teal); /* Active indicator line */
+            font-weight: bold;
+            background-color: transparent; /* Ensure no background color override */
+        }
+        .tab-link:hover:not(.active) {
+            color: var(--text-light); /* Hover color for inactive tabs */
+        }
+
+        /* Stats bar styling - from Habituality */
+        .stats-bar {
+            display: flex;
+            justify-content: space-around;
+            flex-wrap: wrap; 
+            background-color: var(--primary-bg);
+            padding: 8px;
+            border-radius: 5px;
+            margin-bottom: 15px;
+        }
+        .stat {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            font-size: 0.85em;
+            margin: 5px; 
+            min-width: 55px;
+        }
+        .stat-label { color: var(--text-muted); margin-bottom: 3px; font-size:0.9em; }
+        .stat-value { 
+            color: var(--accent-red); 
+            font-weight: bold; 
+            font-size: 1em;
+            transition: transform 0.2s ease-out; 
+        }
+        .stat-value.emphasize { /* For visual feedback on stat change */
+            transform: scale(1.2);
+        }
+        .progress-bar-container {
+            width: 50px; height: 6px; background-color: #555; border-radius: 3px; overflow: hidden; margin-top:2px;
+        }
+        .progress-bar {
+            height: 100%; background-color: var(--accent-green); width: 0%; 
+            transition: width 0.3s ease-in-out;
+        }
+        /* End Stats Bar Styling */
+
+        /* Responsive adjustments from Habituality */
+        @media (min-width: 768px) {
+            body {
+                padding: 20px;
+                 padding-bottom: 70px; /* Ensure space for bottom nav still applies */
+            }
+            .app-container {
+                padding: 20px;
+            }
+            h1.app-title {
+                font-size: 2.5em;
+            }
+            .stats-bar {
+                padding: 10px;
+            }
+            .stat {
+                font-size: 0.9em;
+                margin: 5px 10px;
+            }
+            .stat-value { font-size: 1.1em; }
+            .progress-bar-container { width: 60px; height: 8px; }
+
+            /* Adjust modal for larger screens */
+            .modal-content {
+                margin: 5% auto; /* Less top margin */
+            }
+
+            /* Adjust form inputs for larger screens */
+             input[type="text"], 
+             textarea,
+             select {
+                font-size: 1em;
+            }
+        }
+
+        /* New Task Item Styling from Habituality */
+        .task-list { /* This will be the new class for our <ul> elements */
+            padding-left: 0; /* Remove default ul padding */
+            list-style-type: none; /* Remove default list bullets */
+            margin: 0;
+        }
+
+        .empty-state-message {
+            color: var(--text-muted);
+            font-style: italic;
+            padding: 10px 0;
+            font-size: 0.9em;
+            text-align: center;
+        }
+
+        .task-item {
+            background-color: var(--item-bg);
+            padding: 10px; 
+            margin-bottom: 8px;
+            border-radius: 5px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: background-color 0.2s, opacity 0.2s, transform 0.1s ease-out;
+            text-align: left; 
+            cursor: pointer; 
+        }
+        .task-item:active { 
+            transform: scale(0.98);
+        }
+        .task-item:hover {
+            background-color: var(--item-hover-bg);
+        }
+        .task-item.completed {
+            background-color: var(--item-completed-bg);
+            opacity: 0.7;
+        }
+        .task-item.completed .task-main-text {
+            text-decoration: line-through;
+            color: var(--text-muted); /* Lighter text for completed */
+        }
+
+        .task-content {
+            flex-grow: 1;
+            margin-right: 8px; 
+        }
+        .task-main-text {
+            display: block; 
+            font-weight: 500;
+            font-size: 0.95em;
+            color: var(--text-light); /* Ensure text is light for dark item bg */
+        }
+        .task-note {
+            font-size: 0.8em; 
+            color: var(--text-muted);
+            display: block;
+            margin-top: 2px;
+        }
+        
+        .task-actions {
+            display: flex;
+            align-items: center;
+            flex-shrink: 0; 
+        }
+        .task-actions button, .task-actions .checkbox-container {
+            margin-left: 5px;
+        }
+
+        .task-actions button { /* Style for buttons specifically within task actions like + / - */
+            background-color: var(--accent-orange);
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9em;
+            transition: background-color 0.2s ease, transform 0.1s ease;
+        }
+        .task-actions button:hover { background-color: #d35400; } 
+        .task-actions button:active { transform: scale(0.95); }
+        .task-actions button:disabled {
+            background-color: #7f8c8d; 
+            cursor: not-allowed;
+            opacity: 0.7;
+        }
+        .task-actions button.plus { background-color: var(--accent-green); }
+        .task-actions button.plus:hover { background-color: #27ae60; }
+        .task-actions button.minus { background-color: var(--accent-red); }
+        .task-actions button.minus:hover { background-color: #c0392b; }
+
+        .checkbox-container {
+            display: flex; 
+            justify-content: center;
+            align-items: center;
+            width: 24px; 
+            height: 24px;
+            background-color: var(--primary-bg); /* Match app background */
+            border: 2px solid var(--border-color);
+            border-radius: 4px;
+            cursor: pointer;
+            position: relative;
+            vertical-align: middle;
+        }
+        .checkbox-container.checked::after {
+            content: '\2714'; /* Checkmark symbol (Unicode) */
+            color: var(--accent-green); 
+            font-size: 18px;
+            font-weight: bold;
+            line-height: 1;
+        }
+        /* End New Task Item Styling */
+    </style>
+</head>
+<body>
+    <div class="app-container"> <!-- Main app wrapper -->
+        <h1 class="app-title">SideQuest</h1> <!-- App Title -->
+
+        <!-- Stats Bar (from Habituality) -->
+        <div class="stats-bar">
+            <div class="stat">
+                <span class="stat-label">HP</span>
+                <div class="progress-bar-container"><div id="hpBar" class="progress-bar"></div></div>
+                <span id="statHP" class="stat-value">0/0</span>
+            </div>
+            <div class="stat">
+                <span class="stat-label">XP</span>
+                <div class="progress-bar-container"><div id="xpBar" class="progress-bar"></div></div>
+                <span id="statXP" class="stat-value">0/0</span>
+            </div>
+            <div class="stat">
+                <span class="stat-label">MP</span>
+                <div class="progress-bar-container"><div id="mpBar" class="progress-bar"></div></div>
+                <span id="statMP" class="stat-value">0/0</span>
+            </div>
+            <div class="stat">
+                <span class="stat-label">Level</span>
+                <span id="statLevel" class="stat-value">1</span>
+            </div>
+            <div class="stat">
+                <span class="stat-label">Gold</span>
+                <span id="statGold" class="stat-value">0</span>
+            </div>
+        </div>
+        <!-- End Stats Bar -->
+
+        <div id="top-section">
+            <div id="game-container"></div>
+            <button id="open-customization-btn" class="button">Customize Character</button>
+        </div>
+
+        <!-- Character Customization Panel (Modal) -->
+        <div id="character-customization-panel" class="panel modal"> <!-- Added modal class -->
+            <div class="modal-content">
+                <span class="close-btn">&times;</span>
+                <h2>Character Customization</h2>
+                <label for="gender-select">Gender:</label>
+                <select id="gender-select">
+                    <option value="male">Male</option>
+                    <option value="female">Female</option>
+                    <option value="nonbinary">Non-binary</option>
+                </select>
+                <label for="skin-select">Skin Color:</label>
+                <select id="skin-select">
+                    <option value="light">Light</option>
+                    <option value="amber">Amber</option>
+                    <option value="olive">Olive</option>
+                    <option value="taupe">Taupe</option>
+                    <option value="bronze">Bronze</option>
+                    <option value="brown">Brown</option>
+                    <option value="black">Black</option>
+                    <option value="lavender">Lavender</option>
+                    <option value="blue">Blue</option>
+                    <option value="zombie_green">Zombie Green</option>
+                    <option value="green">Green</option>
+                    <option value="pale_green">Pale Green</option>
+                    <option value="bright_green">Bright Green</option>
+                    <option value="dark_green">Dark Green</option>
+                    <option value="fur_black">Fur Black</option>
+                    <option value="fur_brown">Fur Brown</option>
+                    <option value="fur_tan">Fur Tan</option>
+                    <option value="fur_copper">Fur Copper</option>
+                    <option value="fur_gold">Fur Gold</option>
+                    <option value="fur_grey">Fur Grey</option>
+                    <option value="fur_white">Fur White</option>
+                </select>
+                <label for="class-select">Class:</label>
+                <select id="class-select">
+                    <option value="warrior">Warrior</option>
+                    <option value="mage">Mage</option>
+                    <option value="archer">Archer</option>
+                    <!-- Add more classes as needed -->
+                </select>
+                <label for="hair-style-select">Hair Style:</label>
+                <select id="hair-style-select">
+                    <option value="afro">Afro</option>
+                    <option value="plain">Plain</option>
+                    <option value="long">Long</option>
+                    <option value="bob">Bob</option>
+                    <option value="buzzcut">Buzzcut</option>
+                    <option value="ponytail">Ponytail</option>
+                    <option value="curly_short">Curly Short</option>
+                    <option value="spiked">Spiked</option>
+                    <option value="balding">Balding</option>
+                </select>
+                <label for="hair-color-select">Hair Color:</label>
+                <select id="hair-color-select">
+                    <option value="black">Black</option>
+                    <option value="blonde">Blonde</option>
+                    <option value="brown">Brown</option>
+                    <option value="red">Red</option>
+                    <option value="white">White</option>
+                    <option value="gray">Gray</option>
+                    <option value="blue">Blue</option>
+                    <option value="green">Green</option>
+                    <option value="pink">Pink</option>
+                    <option value="orange">Orange</option>
+                    <option value="purple">Purple</option>
+                    <option value="gold">Gold</option>
+                    <option value="chestnut">Chestnut</option>
+                    <option value="light_brown">Light Brown</option>
+                    <option value="dark_brown">Dark Brown</option>
+                    <option value="platinum">Platinum</option>
+                    <option value="raven">Raven</option>
+                    <option value="sandy">Sandy</option>
+                    <option value="strawberry">Strawberry</option>
+                    <option value="carrot">Carrot</option>
+                    <option value="rose">Rose</option>
+                    <option value="violet">Violet</option>
+                </select>
+                <div id="direction-controls">
+                    <button onclick="setDirection('up')">↑ Up</button>
+                    <button onclick="setDirection('left')">← Left</button>
+                    <button onclick="setDirection('down')">↓ Down</button>
+                    <button onclick="setDirection('right')">Right →</button>
+                </div>
+                <div id="pose-select-container">
+                    <label for="pose-select">Pose/Animation:</label>
+                    <select id="pose-select">
+                        <option value="idle-down">Idle Down</option>
+                        <option value="idle-up">Idle Up</option>
+                        <option value="idle-left">Idle Left</option>
+                        <option value="idle-right">Idle Right</option>
+                        <option value="walk-down">Walk Down</option>
+                        <option value="walk-up">Walk Up</option>
+                        <option value="walk-left">Walk Left</option>
+                        <option value="walk-right">Walk Right</option>
+                        <option value="spellcast-down">Spellcast Down</option>
+                        <option value="spellcast-up">Spellcast Up</option>
+                        <option value="spellcast-left">Spellcast Left</option>
+                        <option value="spellcast-right">Spellcast Right</option>
+                        <option value="thrust-down">Thrust Down</option>
+                        <option value="thrust-up">Thrust Up</option>
+                        <option value="thrust-left">Thrust Left</option>
+                        <option value="thrust-right">Thrust Right</option>
+                        <option value="slash-down">Slash Down</option>
+                        <option value="slash-up">Slash Up</option>
+                        <option value="slash-left">Slash Left</option>
+                        <option value="slash-right">Slash Right</option>
+                        <option value="shoot-down">Shoot Down</option>
+                        <option value="shoot-up">Shoot Up</option>
+                        <option value="shoot-left">Shoot Left</option>
+                        <option value="shoot-right">Shoot Right</option>
+                        <option value="hurt-down">Hurt (Down)</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- Task Form Modal -->
+        <div id="task-form-modal" class="modal">
+            <div class="modal-content">
+                <span class="close-btn">&times;</span>
+                <h2>Add New Task</h2>
+                <form id="task-form">
+                    <label for="task-title">Title:</label>
+                    <input type="text" id="task-title" required>
+                    
+                    <label for="task-notes">Notes (Optional):</label>
+                    <textarea id="task-notes"></textarea>
+
+                    <label for="task-difficulty">Difficulty:</label>
+                    <select id="task-difficulty">
+                        <option value="easy">Easy</option>
+                        <option value="medium" selected>Medium</option>
+                        <option value="hard">Hard</option>
+                    </select>
+                    
+                    <button type="submit">Create Task</button>
+                </form>
+                <div id="modal-error-message" class="error-message" style="color: var(--accent-red); margin-top: 10px;"></div>
+            </div>
+        </div>
+
+        <div id="main-content-area">
+            <div id="task-management-area">
+                <button id="open-task-form-btn">+ Add New Task</button>
+                
+                <div id="task-view-area">
+                    <div id="todo-content" class="tab-pane active">
+                        <h2>To Do</h2>
+                        <div id="list-todo">
+                            <div class="loader"></div>
+                            <p>Loading tasks...</p>
+                        </div>
+                        <div id="error-todo"></div>
+                    </div>
+
+                    <div id="dailies-content" class="tab-pane">
+                        <h2>Dailies</h2>
+                        <div id="list-dailies">
+                            <p>Dailies will appear here.</p>
+                        </div>
+                        <div id="error-dailies"></div>
+                    </div>
+
+                    <div id="habits-content" class="tab-pane">
+                        <h2>Habits</h2>
+                        <div id="list-habits">
+                            <p>Habits will appear here.</p>
+                        </div>
+                        <div id="error-habits"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <nav id="bottom-tab-nav">
+            <button class="tab-link active" data-tab="todo-content">To Do</button>
+            <button class="tab-link" data-tab="dailies-content">Dailies</button>
+            <button class="tab-link" data-tab="habits-content">Habits</button>
+        </nav>
+    </div> <!-- Close .app-container -->
+
+    <script>
+        let currentActiveTaskPaneId = 'todo-content'; // Default active tab
+
+        function getActiveTaskElements() {
+            // Corrected logic for list ID
+            let derivedListId = 'list-todo'; // default
+            if (currentActiveTaskPaneId === 'dailies-content') derivedListId = 'list-dailies';
+            else if (currentActiveTaskPaneId === 'habits-content') derivedListId = 'list-habits';
+
+            // Corrected logic for error ID to match HTML element IDs
+            let derivedErrorId = 'error-todo'; // default
+            if (currentActiveTaskPaneId === 'dailies-content') derivedErrorId = 'error-dailies';
+            else if (currentActiveTaskPaneId === 'habits-content') derivedErrorId = 'error-habits';
+            
+            return {
+                listDiv: document.getElementById(derivedListId),
+                errorDiv: document.getElementById(derivedErrorId)
+            };
+        }
+
+        async function fetchTasks() {
+            const { listDiv, errorDiv } = getActiveTaskElements();
+            if (!listDiv || !errorDiv) {
+                console.error('Active task elements not found for pane:', currentActiveTaskPaneId);
+                return;
+            }
+
+            listDiv.innerHTML = '<div class="loader"></div><p>Loading tasks...</p>';
+            errorDiv.textContent = '';
+
+            // Determine task_type based on the active tab
+            let taskTypeFilter = 'todo'; // Default
+            if (currentActiveTaskPaneId === 'dailies-content') taskTypeFilter = 'daily';
+            else if (currentActiveTaskPaneId === 'habits-content') taskTypeFilter = 'habit';
+
+            try {
+                // Pass the task_type_filter to the backend
+                const response = await fetch(`/api/tasks?type=${taskTypeFilter}`);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const tasks = await response.json();
+                if (tasks.length === 0) {
+                    const paneName = currentActiveTaskPaneId.split('-')[0];
+                    listDiv.innerHTML = `<p class="empty-state-message">No ${paneName} tasks yet. Add one!</p>`;
+                } else {
+                    let html = '<ul class="task-list">'; // Added task-list class to ul
+                    tasks.forEach(task => {
+                        html += `<li class="task-item ${task.is_completed ? 'completed' : ''}" id="task-${task.id}">
+                                    <div class="task-content">
+                                        <span class="task-main-text">${task.title}</span>
+                                        ${task.notes ? `<span class="task-note">${task.notes}</span>` : ''}
+                                    </div>
+                                    <div class="task-actions">
+                        `;
+                        // Task-specific actions based on task.task_type (which we'll add to backend response soon)
+                        // For now, we derive it from currentActiveTaskPaneId for frontend demo
+                        if (taskTypeFilter === 'habit') {
+                            html += `<button class="plus" onclick="scoreHabit('${task.id}', 'positive')">+</button>
+                                     <button class="minus" onclick="scoreHabit('${task.id}', 'negative')">-</button>`;
+                        } else { // Dailies and To-Dos
+                            html += `<div class="checkbox-container ${task.is_completed ? 'checked' : ''}" onclick="toggleTaskComplete(${task.id}, ${task.is_completed})"></div>`;
+                        }
+                        html += `   </div>
+                                 </li>`;
+                    });
+                    html += '</ul>';
+                    listDiv.innerHTML = html;
+                }
+            } catch (error) {
+                console.error('Error fetching tasks:', error);
+                listDiv.innerHTML = '';
+                errorDiv.innerHTML = `<p class="empty-state-message" style="color: var(--accent-red);">Error fetching tasks: ${error.message}.</p>`;
+            }
+        }
+
+        async function createTask() {
+            const { errorDiv } = getActiveTaskElements();
+            const titleInput = document.getElementById('task-title');
+            const notesInput = document.getElementById('task-notes');
+            const difficultyInput = document.getElementById('task-difficulty'); // Get difficulty
+            
+            const title = titleInput.value;
+            const notes = notesInput.value;
+            const difficulty = difficultyInput.value; // Get selected difficulty
+
+            // Determine task_type based on the active tab for creating the task
+            let taskType = 'todo'; // Default
+            if (currentActiveTaskPaneId === 'dailies-content') taskType = 'daily';
+            else if (currentActiveTaskPaneId === 'habits-content') taskType = 'habit';
+
+            // Clear previous error messages in the modal
+            const modalErrorDiv = document.getElementById('modal-error-message');
+            if(modalErrorDiv) modalErrorDiv.textContent = '';
+
+            if (!title) {
+                if(modalErrorDiv) modalErrorDiv.textContent = 'Task title is required.';
+                return false; // Indicate failure
+            }
+
+            try {
+                const response = await fetch('/api/tasks', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        title: title, 
+                        notes: notes, 
+                        task_type: taskType, // Send task_type
+                        difficulty: difficulty // Send difficulty
+                    }),
+                });
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({ error: 'Unknown error during task creation.' }));
+                    throw new Error(`HTTP error! status: ${response.status} - ${errorData.error || 'Failed to create task'}`);
+                }
+                titleInput.value = '';
+                notesInput.value = '';
+                difficultyInput.value = 'medium'; // Reset difficulty to medium
+                await fetchTasks(); // Refresh list for the current tab
+                return true; // Indicate success
+            } catch (error) {
+                console.error('Error creating task:', error);
+                if(modalErrorDiv) modalErrorDiv.innerHTML = `<p>Error creating task: ${error.message}</p>`;
+                return false; // Indicate failure
+            }
+        }
+
+        async function createTaskAndCloseModal() {
+            const success = await createTask(); 
+            if (success) { 
+                const taskModal = document.getElementById('task-form-modal');
+                taskModal.style.display = 'none';
+            }
+        }
+
+        async function toggleTaskComplete(taskId, currentStatus) {
+            const { errorDiv } = getActiveTaskElements(); 
+            if (!errorDiv) return;
+            // Clear error message in the main tab area for this action
+            errorDiv.textContent = '';
+            try {
+                const response = await fetch(`/api/tasks/${taskId}`,
+                 {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ is_completed: !currentStatus }),
+                });
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({ error: 'Unknown error updating task.' }));
+                    throw new Error(`HTTP error! status: ${response.status} - ${errorData.error || 'Failed to update task'}`);
+                }
+                await fetchTasks(); 
+            } catch (error) {
+                console.error('Error updating task:', error);
+                errorDiv.innerHTML = `<p class="empty-state-message" style="color: var(--accent-red);">Error updating task: ${error.message}</p>`;
+            }
+        }
+
+        // Placeholder for scoreHabit function
+        function scoreHabit(taskId, scoreType) {
+            console.log(`Scoring habit: ${taskId}, Type: ${scoreType}`);
+            // Later, this will interact with userStats and provide feedback
+            // For now, let's try to optimistically update UI if possible or just re-fetch
+            // This is a placeholder - actual stat changes will be in Phase 3
+            if (scoreType === 'positive') {
+                // userStats.xp += 10; // Example future logic
+                // showFeedback('Good job!', 'positive');
+            } else {
+                // userStats.hp -= 5; // Example future logic
+                // showFeedback('Ouch!', 'negative');
+            }
+            // emphasizeStat(scoreType === 'positive' ? 'statXP' : 'statHP');
+            // renderStats();
+            // fetchTasks(); // Could re-fetch to ensure consistency if habit state changes on backend
+        }
+
+        let currentGender = 'female';
+        let currentSkin = 'orc';
+        let currentHair = 'bangslong';
+        let currentHairColor = 'black';
+        let currentAnimation = 'idle';
+        let currentDirection = 'down';
+        let currentClass = 'warrior';
+        let game = null;
+        let playerSprite = null;
+        let currentPose = 'idledown.png';
+
+        const CLASS_DEFAULT_CLOTHING = {
+            'warrior': {
+                torso: 'torso/armour/plate',
+                legs: 'legs/armour/plate'
+            },
+            'mage': {
+                torso: 'torso/clothes/robe', // Assuming a generic robe.png exists in this path per gender/animType
+                legs: 'legs/pants/black_pants' // Assuming black_pants.png exists per gender/animType
+            },
+            'archer': {
+                torso: 'torso/leather/studded', // Assuming studded.png exists per gender/animType
+                legs: 'legs/pants/brown_pants' // Assuming brown_pants.png exists per gender/animType
+            }
+        };
+
+        const LPC_ANIM_FRAMES = {
+            'walk': { // 9 frames per direction
+                'up':    { start: 0,  end: 8 },
+                'left':  { start: 9,  end: 17 },
+                'down':  { start: 18, end: 26 },
+                'right': { start: 27, end: 35 },
+                frameRate: 10
+            },
+            'spellcast': { // 7 frames per direction
+                'up':    { start: 0,  end: 6 },
+                'left':  { start: 7,  end: 13 },
+                'down':  { start: 14, end: 20 },
+                'right': { start: 21, end: 27 },
+                frameRate: 8 // Spellcasts are often a bit slower
+            },
+            'thrust': { // 8 frames per direction
+                'up':    { start: 0,  end: 7 },
+                'left':  { start: 8,  end: 15 },
+                'down':  { start: 16, end: 23 },
+                'right': { start: 24, end: 31 },
+                frameRate: 12
+            },
+            'slash': { // 6 frames per direction
+                'up':    { start: 0,  end: 5 },
+                'left':  { start: 6,  end: 11 },
+                'down':  { start: 12, end: 17 },
+                'right': { start: 18, end: 23 },
+                frameRate: 12
+            },
+            'shoot': { // 13 frames per direction
+                'up':    { start: 0,  end: 12 },
+                'left':  { start: 13, end: 25 },
+                'down':  { start: 26, end: 38 },
+                'right': { start: 39, end: 51 },
+                frameRate: 15 // Shooting can be faster
+            },
+            'hurt': { // 6 frames total, single direction
+                'down':  { start: 0, end: 5 }, // Assumes hurt.png is 0-5 frames for one sequence
+                frameRate: 10,
+                isSingleDirection: true // Flag to indicate it only has one hardcoded direction
+            },
+            'idle': { // Add a specific configuration for 'idle' animations
+                'down':  { start: 0, end: 5 }, // Assuming idle.png has 6 frames for down animation
+                'up':    { start: 0, end: 0 }, // Fallback static frame for up, from idle.png
+                'left':  { start: 0, end: 0 }, // Fallback static frame for left, from idle.png
+                'right': { start: 0, end: 0 }, // Fallback static frame for right, from idle.png
+                frameRate: 5, // Slower frame rate for idle
+                isSingleDirectionalSequence: true // Indicates the primary sequence is 'down' and others are static fallbacks
+            }
+        };
+
+        function setDirection(direction) {
+            if (currentAnimation === 'hurt' && direction !== 'down') {
+                currentAnimation = 'idle'; // Switch from hurt to idle if direction changes
+            }
+            currentDirection = direction;
+            startPhaserLPC(currentGender, currentSkin, currentHair, currentHairColor, currentAnimation, currentDirection, currentClass);
+        }
+
+        function startPhaserLPC(gender, skin, hairStyle, hairColor, animation, direction, charClass) {
+            console.log("Attempting to start Phaser LPC with:", gender, skin, hairStyle, hairColor, animation, direction, charClass);
+            if (game) {
+                game.destroy(true, false);
+                game = null;
+            }
+            const lpcGender = (gender === 'nonbinary') ? 'male' : gender;
+            console.log(`Starting Phaser with Class: ${charClass}`);
+
+            const GameScene = new Phaser.Class({
+                Extends: Phaser.Scene,
+                initialize:
+                function GameScene() {
+                    Phaser.Scene.call(this, { key: 'GameScene' });
+                },
+                preload: function() {
+                    const animType = animation;
+                    const lpcAnimFileName = `${animType}.png`;
+
+                    const selectedClassClothing = CLASS_DEFAULT_CLOTHING[charClass];
+
+                    this.load.spritesheet('body', `assets/LPC/spritesheets/body/bodies/${lpcGender}/${skin}/${lpcAnimFileName}`, {
+                        frameWidth: 64, frameHeight: 64
+                    });
+
+                    if (selectedClassClothing) {
+                        if (selectedClassClothing.legs) {
+                            this.load.spritesheet('legs_sprite', `assets/LPC/spritesheets/${selectedClassClothing.legs}/${lpcGender}/${lpcAnimFileName}`, {
+                                frameWidth: 64, frameHeight: 64
+                            });
+                        }
+                        if (selectedClassClothing.torso) {
+                            this.load.spritesheet('torso_sprite', `assets/LPC/spritesheets/${selectedClassClothing.torso}/${lpcGender}/${lpcAnimFileName}`, {
+                                frameWidth: 64, frameHeight: 64
+                            });
+                        }
+                    }
+
+                    this.load.spritesheet('head', `assets/LPC/spritesheets/head/heads/human/${lpcGender}/${skin}/${lpcAnimFileName}`, {
+                        frameWidth: 64, frameHeight: 64
+                    });
+
+                    this.load.spritesheet('hair', `assets/LPC/spritesheets/hair/${hairStyle}/${hairColor}/${lpcGender}/${lpcAnimFileName}`, {
+                        frameWidth: 64, frameHeight: 64
+                    });
+                },
+                create: function() {
+                    this.cameras.main.setBackgroundColor('#000033');
+
+                    const baseLayers = ['body', 'head', 'hair'];
+                    const clothingLayers = [];
+                    const selectedClassClothing = CLASS_DEFAULT_CLOTHING[charClass];
+
+                    if (selectedClassClothing) {
+                        if (selectedClassClothing.legs) clothingLayers.push('legs_sprite');
+                        if (selectedClassClothing.torso) clothingLayers.push('torso_sprite');
+                    }
+                    
+                    // Define render order: body, then clothing, then head/hair
+                    const allLayerKeys = ['body', ...clothingLayers, 'head', 'hair'];
+                    this.characterSprites = {}; // To store all sprite objects
+
+                    // Define animations if they don't exist and it's not 'idle'
+                    if (animation !== 'idle') {
+                        const animData = LPC_ANIM_FRAMES[animation];
+                        if (animData) {
+                            const directionsToDefine = animData.isSingleDirection ? ['down'] : Object.keys(animData).filter(k => k !== 'frameRate' && k !== 'isSingleDirection');
+                            
+                            for (const layerKey of allLayerKeys) { // Create anims for base AND clothing layers
+                                // Check if texture for layerKey was actually loaded (e.g. clothing might fail)
+                                if (this.textures.exists(layerKey)) {
+                                    for (const dir of directionsToDefine) {
+                                        const frameConfig = animData[dir];
+                                        if (frameConfig) {
+                                            const animKey = `${layerKey}_${animation}_${dir}`;
+                                            if (!this.anims.exists(animKey)) {
+                                                this.anims.create({
+                                                    key: animKey,
+                                                    frames: this.anims.generateFrameNumbers(layerKey, {
+                                                        start: frameConfig.start,
+                                                        end: frameConfig.end
+                                                    }),
+                                                    frameRate: animData.frameRate || 10,
+                                                    repeat: (animation === 'hurt') ? 0 : -1
+                                                });
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Create sprites in specified order and set initial animation/frame
+                    allLayerKeys.forEach(layerKey => {
+                        if (!this.textures.exists(layerKey)) {
+                            console.warn(`Texture for layer ${layerKey} not loaded, skipping sprite creation.`);
+                            return; // Skip if texture failed to load (e.g. missing clothing asset)
+                        }
+
+                        const sprite = this.add.sprite(
+                            this.cameras.main.width / 2,
+                            this.cameras.main.height / 2 + 64,
+                            layerKey
+                        );
+                        sprite.setOrigin(0.5, 1);
+                        sprite.setScale(2);
+                        this.characterSprites[layerKey] = sprite; // Store sprite
+
+                        if (animation === 'idle') {
+                            if (sprite.anims.isPlaying) {
+                                sprite.stop();
+                            }
+                            const idleAnimData = LPC_ANIM_FRAMES['idle'];
+                            const idleFrameConfig = idleAnimData[direction] || idleAnimData['down']; // Fallback to down if specific direction not in idle config
+                            
+                            // If idle is meant to be a short animation for the current direction
+                            if (idleAnimData.isSingleDirectionalSequence && direction === 'down') {
+                                const idleAnimKey = `${layerKey}_idle_down`;
+                                if (!this.anims.exists(idleAnimKey)) {
+                                    this.anims.create({
+                                        key: idleAnimKey,
+                                        frames: this.anims.generateFrameNumbers(layerKey, { start: idleFrameConfig.start, end: idleFrameConfig.end }),
+                                        frameRate: idleAnimData.frameRate,
+                                        repeat: -1
+                                    });
+                                }
+                                if (this.textures.exists(layerKey)) sprite.play(idleAnimKey);
+                            } else {
+                                // Set static frame for idle
+                                if (this.textures.exists(layerKey)) sprite.setFrame(idleFrameConfig.start); // Use start frame of the config
+                            }
+                        } else {
+                            const animData = LPC_ANIM_FRAMES[animation];
+                            const animDirection = (animData && animData.isSingleDirection) ? 'down' : direction;
+                            const animKey = `${layerKey}_${animation}_${animDirection}`;
+
+                            if (animData && animData[animDirection] && this.anims.exists(animKey)) {
+                                sprite.play(animKey);
+                                if (animation === 'hurt' && layerKey === 'body') { // Only attach to one sprite to avoid multiple triggers
+                                    sprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE_KEY + animKey, () => {
+                                        if(animation === 'hurt') {
+                                            animation = 'idle';
+                                            const idleFrameStart = LPC_ANIM_FRAMES['walk'][direction] ? LPC_ANIM_FRAMES['walk'][direction].start : LPC_ANIM_FRAMES['walk']['down'].start;
+                                            allLayerKeys.forEach(lKey => {
+                                                if(this.characterSprites[lKey] && this.textures.exists(lKey)) {
+                                                    if (this.characterSprites[lKey].anims.isPlaying) this.characterSprites[lKey].stop();
+                                                    this.characterSprites[lKey].setFrame(idleFrameStart);
+                                                }
+                                            });
+                                            document.getElementById('pose-select').value = `idle-${direction}`;
+                                        }
+                                    });
+                                }
+                            } else {
+                                if (sprite.anims.isPlaying) sprite.stop();
+                                const fallbackFrameDirection = LPC_ANIM_FRAMES['walk'][direction] ? direction : 'down';
+                                sprite.setFrame(LPC_ANIM_FRAMES['walk'][fallbackFrameDirection].start);
+                                if (animation !== 'idle') { // Only warn if we expected an animation
+                                   console.warn(`Animation key ${animKey} not found. Fell back to idle for ${layerKey}`);
+                                }
+                            }
+                        }
+                    });
+                }
+            });
+            const phaserConfig = {
+                type: Phaser.AUTO,
+                width: 400,
+                height: 220,
+                parent: 'game-container',
+                scene: [GameScene]
+            };
+            game = new Phaser.Game(phaserConfig);
+        }
+
+        document.getElementById('gender-select').addEventListener('change', function(e) {
+            currentGender = e.target.value;
+            startPhaserLPC(currentGender, currentSkin, currentHair, currentHairColor, currentAnimation, currentDirection, currentClass);
+        });
+        document.getElementById('skin-select').addEventListener('change', function(e) {
+            currentSkin = e.target.value;
+            startPhaserLPC(currentGender, currentSkin, currentHair, currentHairColor, currentAnimation, currentDirection, currentClass);
+        });
+        document.getElementById('hair-style-select').addEventListener('change', function(e) {
+            currentHair = e.target.value;
+            startPhaserLPC(currentGender, currentSkin, currentHair, currentHairColor, currentAnimation, currentDirection, currentClass);
+        });
+        document.getElementById('hair-color-select').addEventListener('change', function(e) {
+            currentHairColor = e.target.value;
+            startPhaserLPC(currentGender, currentSkin, currentHair, currentHairColor, currentAnimation, currentDirection, currentClass);
+        });
+        document.getElementById('pose-select').addEventListener('change', function(e) {
+            const parts = e.target.value.split('-');
+            currentAnimation = parts[0];
+            currentDirection = parts[1];
+            startPhaserLPC(currentGender, currentSkin, currentHair, currentHairColor, currentAnimation, currentDirection, currentClass);
+        });
+        document.getElementById('class-select').addEventListener('change', function(e) {
+            currentClass = e.target.value;
+            startPhaserLPC(currentGender, currentSkin, currentHair, currentHairColor, currentAnimation, currentDirection, currentClass);
+        });
+
+        startPhaserLPC(currentGender, currentSkin, currentHair, currentHairColor, currentAnimation, currentDirection, currentClass);
+
+        // Modal Get Elements
+        const customizationModal = document.getElementById('character-customization-panel');
+        const openModalBtn = document.getElementById('open-customization-btn');
+        const closeModalBtn = customizationModal.querySelector('.close-btn'); // Get close button inside modal
+
+        // Modal Event Listeners
+        openModalBtn.onclick = function() {
+            customizationModal.style.display = 'block';
+        }
+
+        closeModalBtn.onclick = function() {
+            customizationModal.style.display = 'none';
+        }
+
+        // Close modal if user clicks outside of the modal content
+        window.onclick = function(event) {
+            if (event.target == customizationModal) {
+                customizationModal.style.display = 'none';
+            }
+        }
+
+        // Task Form Modal Elements & Logic
+        const taskFormModal = document.getElementById('task-form-modal');
+        const openTaskFormBtn = document.getElementById('open-task-form-btn');
+        const closeTaskFormBtn = taskFormModal.querySelector('.close-btn');
+
+        openTaskFormBtn.onclick = function() {
+            taskFormModal.style.display = 'block';
+        }
+        closeTaskFormBtn.onclick = function() {
+            taskFormModal.style.display = 'none';
+        }
+
+        // Updated createTask to also close the modal
+        async function createTaskAndCloseModal() {
+            await createTask(); 
+            const { errorDiv } = getActiveTaskElements();
+            if (errorDiv && !errorDiv.textContent) { 
+                taskFormModal.style.display = 'none';
+            }
+        }
+
+        // Close modal if user clicks outside of the modal content
+        window.onclick = function(event) {
+            if (event.target.classList.contains('modal')) {
+                event.target.style.display = "none";
+            }
+        }
+
+        // Tab Switching Logic
+        const tabLinks = document.querySelectorAll('.tab-link');
+        const tabPanes = document.querySelectorAll('.tab-pane');
+
+        tabLinks.forEach(link => {
+            link.addEventListener('click', () => {
+                // Deactivate all tabs and panes
+                tabLinks.forEach(l => l.classList.remove('active'));
+                tabPanes.forEach(p => p.classList.remove('active'));
+
+                // Activate clicked tab and corresponding pane
+                link.classList.add('active');
+                currentActiveTaskPaneId = link.getAttribute('data-tab'); // Update active tab ID
+                const targetPane = document.getElementById(currentActiveTaskPaneId);
+                if (targetPane) targetPane.classList.add('active');
+                
+                fetchTasks(); // Fetch tasks for the newly activated tab
+            });
+        });
+
+        // --- Game State & Data (New for stats bar) ---
+        let userStats = {
+            hp: 50, maxHP: 100,
+            xp: 0, maxXPFactor: 100, // maxXPFactor can be dynamic, e.g., userStats.level * 100
+            mp: 50, maxMP: 100,
+            level: 1,
+            gold: 0
+        };
+
+        // Function to render stats (New)
+        function renderStats() {
+            if (!document.getElementById('statHP')) {
+                console.warn("Stats UI elements not found. Skipping renderStats.");
+                return;
+            }
+
+            document.getElementById('statHP').textContent = `${userStats.hp}/${userStats.maxHP}`;
+            const hpBar = document.getElementById('hpBar');
+            hpBar.style.width = `${Math.max(0, (userStats.hp / userStats.maxHP) * 100)}%`;
+            hpBar.style.backgroundColor = userStats.hp < (userStats.maxHP * 0.3) ? 'var(--accent-red)' : 'var(--accent-green)';
+
+            const xpToNextLevel = userStats.level * userStats.maxXPFactor;
+            document.getElementById('statXP').textContent = `${userStats.xp}/${xpToNextLevel}`;
+            document.getElementById('xpBar').style.width = xpToNextLevel > 0 ? `${(userStats.xp / xpToNextLevel) * 100}%` : '0%';
+            document.getElementById('xpBar').style.backgroundColor = 'var(--accent-blue)';
+
+            document.getElementById('statMP').textContent = `${userStats.mp}/${userStats.maxMP}`;
+            const mpBar = document.getElementById('mpBar');
+            mpBar.style.width = `${Math.max(0, (userStats.mp / userStats.maxMP) * 100)}%`;
+            mpBar.style.backgroundColor = 'var(--accent-purple)';
+            
+            document.getElementById('statLevel').textContent = userStats.level;
+            document.getElementById('statGold').textContent = userStats.gold;
+        }
+        
+        // Function to emphasize stat changes (New)
+        function emphasizeStat(elementId) {
+            const el = document.getElementById(elementId);
+            if (el) {
+                el.classList.add('emphasize');
+                setTimeout(() => el.classList.remove('emphasize'), 300); 
+            }
+        }
+
+
+        // --- Initialization and Event Listeners ---
+        function initApp() {
+            // Initialize Phaser game etc. - Using the correct global variables, including hairColor
+            startPhaserLPC(currentGender, currentSkin, currentHair, currentHairColor, currentAnimation, currentDirection, currentClass);
+            
+            // Setup tab listeners
+            document.querySelectorAll('.tab-link').forEach(button => {
+                button.addEventListener('click', () => {
+                    document.querySelectorAll('.tab-link').forEach(l => l.classList.remove('active'));
+                    document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+                    button.classList.add('active');
+                    currentActiveTaskPaneId = button.getAttribute('data-tab');
+                    const targetPane = document.getElementById(currentActiveTaskPaneId);
+                    if (targetPane) targetPane.classList.add('active');
+                    fetchTasks();
+                });
+            });
+
+            // Fetch initial tasks for the default active tab
+            // Ensure the default active tab is correctly set visually as well
+            const defaultActiveTabButton = document.querySelector(`.tab-link[data-tab="${currentActiveTaskPaneId}"]`);
+            if (defaultActiveTabButton) defaultActiveTabButton.classList.add('active');
+            const defaultActivePane = document.getElementById(currentActiveTaskPaneId);
+            if (defaultActivePane) defaultActivePane.classList.add('active');
+            fetchTasks(); 
+
+            // Setup modal open/close listeners
+            // Character Customization Modal (Restoring original logic)
+            const charModal = document.getElementById('character-customization-panel');
+            const openCharModalBtn = document.getElementById('open-customization-btn');
+            const closeCharModalBtn = charModal.querySelector('.close-btn');
+
+            if (openCharModalBtn) {
+                openCharModalBtn.onclick = function() {
+                    charModal.style.display = "block";
+                }
+            }
+            if (closeCharModalBtn) {
+                closeCharModalBtn.onclick = function() {
+                    charModal.style.display = "none";
+                }
+            }
+            
+            // Task Creation Modal (Corrected ID and close button handling)
+            const taskModal = document.getElementById('task-form-modal'); // Corrected ID
+            const openTaskFormBtn = document.getElementById('open-task-form-btn');
+            // Use the generic .close-btn present in both modals for consistency
+            const closeTaskFormBtn = taskModal.querySelector('.close-btn'); 
+
+            if (openTaskFormBtn) {
+                openTaskFormBtn.onclick = function() {
+                    taskModal.style.display = "block";
+                    document.getElementById('modal-error-message').textContent = ''; 
+                    document.getElementById('task-form').reset(); 
+                }
+            }
+            if (closeTaskFormBtn) {
+                 closeTaskFormBtn.onclick = function() { 
+                    taskModal.style.display = "none";
+                }
+            }
+            
+            // Click outside modal to close (Applies to all modals)
+            window.onclick = function(event) {
+                if (event.target.classList.contains('modal')) {
+                    event.target.style.display = "none";
+                }
+            }
+
+            // Task form submission (Restoring original logic)
+            const taskForm = document.getElementById('task-form');
+            if (taskForm) {
+                taskForm.addEventListener('submit', function(event) {
+                    event.preventDefault();
+                    // createTask(); // This would call your existing createTask function
+                    createTaskAndCloseModal(); // Or this if you want to close modal on success
+                });
+            }
+            
+            // Initial render of stats
+            renderStats(); 
+        }
+
+        // Call initApp on window load
+        window.onload = initApp;
+    </script>
+</body>
+</html> 

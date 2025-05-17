@@ -1,0 +1,6 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+NEVER delete the todo.md or SideQuest.md files from the project directory.
