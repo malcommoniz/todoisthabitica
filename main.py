@@ -488,6 +488,7 @@ def perform_single_sync_cycle(event=None, context=None): # Add event, context fo
     # Save the state at the end of the cycle
     save_processed_state(STATE_FILE_PATH, processed_completed_todoist_tasks, processed_completed_habitica_tasks)
     print("Todoist-Habitica single sync cycle finished.")
+    return "Sync complete", 200
 
 
 if __name__ == "__main__":
