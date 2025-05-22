@@ -1,1 +1,1 @@
-web: python -m functions_framework --target perform_single_sync_cycle --source todoist_habitica_sync.py --signature-type http --port $PORT 
+web: /layers/google.python.pip/pip/bin/functions-framework --target perform_single_sync_cycle --source todoist_habitica_sync.py --signature-type http --port $PORT 
