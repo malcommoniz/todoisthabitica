@@ -295,6 +295,7 @@ def cleanup_non_today_habitica_tasks(habitica_tasks: list, todoist_tasks_for_tod
     """
     Deletes Habitica tasks that are not due today in EST time.
     Only affects tasks that were synced from Todoist (have TodoistID in notes).
+    Tasks are simply deleted, not marked as completed.
     """
     print("\nStarting cleanup of non-today tasks from Habitica...")
     today_est = datetime.now(TIMEZONE).date()
@@ -472,7 +473,7 @@ def perform_single_sync_cycle(event=None, context=None):
                 if not is_task_still_due_today:
                     print(f"Debug T->H SYNC: Todoist task '{current_todoist_task_obj.content[:30]}' (TID:{todoist_id}) is not due today. Deleting H:{habitica_id}.")
                     if delete_habitica_task(habitica_id):
-                        processed_completed_habitica_tasks.add(habitica_id) 
+                        pass
                     else:
                         print(f"Failed to delete stale Habitica task {habitica_id} for TID:{todoist_id}")
                     ids_to_remove_from_map_after_combined_TH_sync.add(todoist_id)
@@ -480,8 +481,8 @@ def perform_single_sync_cycle(event=None, context=None):
             if todoist_id not in processed_completed_todoist_tasks:
                 print(f"Debug T->H SYNC: Todoist task (TID:{todoist_id}) from map not in API results (e.g. deleted/very old). Deleting H:{habitica_id}.")
                 if delete_habitica_task(habitica_id): 
-                    processed_completed_todoist_tasks.add(todoist_id)
-                    processed_completed_habitica_tasks.add(habitica_id)
+                    # Don't mark as completed, just remove from map
+                    pass
                 else:
                     print(f"Failed to delete Habitica task {habitica_id} for disappeared TID:{todoist_id}")
                 ids_to_remove_from_map_after_combined_TH_sync.add(todoist_id)
