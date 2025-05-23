@@ -17,7 +17,7 @@ except ImportError:
             TodoistAPIException = Exception # Fallback to general Exception
 
 from todoist_api_python.models import Task # Ensuring Project is not imported
-from datetime import date, datetime
+from datetime import date, datetime, TIMEZONE
 
 # --- Configuration ---
 TODOIST_API_KEY = os.environ.get("TODOIST_API_KEY")
@@ -66,86 +66,40 @@ def save_processed_state(file_path: str, p_todoist_tasks: set[str], p_habitica_t
 
 def get_todoist_tasks(api: TodoistAPI) -> list[Task]:
     """
-    Fetches tasks from Todoist.
-    Attempts to get tasks due today or overdue using a filter if supported.
-    Falls back to fetching all tasks if the filter fails or yields no results.
-    Correctly processes items if they are lists containing Task objects.
+    Fetches tasks from Todoist that are due today in EST timezone.
+    Only returns tasks that are due today and not completed.
     """
     print("Debug: get_todoist_tasks: Initiating task fetch.")
     actual_tasks: list[Task] = []
 
-    # Attempt 1: Use the filter for "today or overdue"
+    # Get today's date in EST timezone
+    est_now = datetime.now(TIMEZONE)
+    today = est_now.date().isoformat()
+    print(f"Debug: Using EST date for filtering: {today}")
+
     try:
-        print("Debug: get_todoist_tasks: Attempting fetch with filter='(today | overdue)'")
-        tasks_response = api.get_tasks(filter="(today | overdue)")
+        print(f"Debug: get_todoist_tasks: Attempting fetch with filter='due: {today}'")
+        tasks_response = api.get_tasks(filter=f"due: {today}")
         fetched_items = list(tasks_response) if tasks_response else []
         
-        print(f"Debug: get_todoist_tasks (filter attempt): Received {len(fetched_items)} raw items from API.")
+        print(f"Debug: get_todoist_tasks: Received {len(fetched_items)} raw items from API.")
 
-        for item_index, item in enumerate(fetched_items):
+        for item in fetched_items:
             if isinstance(item, Task):
-                actual_tasks.append(item)
-            elif isinstance(item, list): # Handle if item is a list
-                print(f"Debug: get_todoist_tasks (filter attempt): Item {item_index+1} is a list. Processing inner items.")
-                for inner_item_index, inner_item in enumerate(item):
-                    if isinstance(inner_item, Task):
-                        actual_tasks.append(inner_item)
-                    else:
-                        print(f"Debug: get_todoist_tasks (filter attempt): Inner item {inner_item_index+1} in list {item_index+1} is type: {type(inner_item)}. Content: {str(inner_item)[:100]}")
-            else:
-                print(f"Debug: get_todoist_tasks (filter attempt): Item {item_index+1} type: {type(item)}. Content: {str(item)[:100]}")
-        
-        print(f"Debug: get_todoist_tasks (filter attempt): Extracted {len(actual_tasks)} Task objects.")
-        if actual_tasks:
-            print(f"Debug: get_todoist_tasks: Successfully fetched {len(actual_tasks)} tasks using filter (or processed list structure).")
-            return actual_tasks
-        else:
-            print("Debug: get_todoist_tasks (filter attempt): Filter '(today | overdue)' (or list processing) yielded no tasks. Will try fallback if filter was the cause.")
-
-    except TypeError as e:
-        if "unexpected keyword argument 'filter'" in str(e):
-            print(f"Warning: get_todoist_tasks: The 'filter' argument is not supported by your todoist-api-python version. Error: {e}")
-        else:
-            print(f"Warning: get_todoist_tasks: TypeError during filtered fetch: {e}")
-    except TodoistAPIException as e:
-        print(f"Warning: get_todoist_tasks: TodoistAPIException with filter='(today | overdue)': {e}")
-    except Exception as e:
-        print(f"Warning: get_todoist_tasks: Unexpected error during filtered fetch: {e}")
-
-    # Fallback: Fetch all tasks if the filtered attempt failed or yielded nothing suitable
-    print("Debug: get_todoist_tasks: Falling back to fetching all tasks without API filter.")
-    actual_tasks = []  # Reset for fallback
-    try:
-        all_tasks_response = api.get_tasks() # No filter
-        fetched_all_items = list(all_tasks_response) if all_tasks_response else []
-
-        print(f"Debug: get_todoist_tasks (fallback): Received {len(fetched_all_items)} raw items from API.")
-
-        for item_index, item in enumerate(fetched_all_items):
-            if isinstance(item, Task):
-                actual_tasks.append(item)
+                # Only include tasks that are not completed
+                if not item.is_completed:
+                    actual_tasks.append(item)
             elif isinstance(item, list):
-                print(f"Debug: get_todoist_tasks (fallback): Item {item_index+1} is a list. Processing inner items.")
-                for inner_item_index, inner_item in enumerate(item):
-                    if isinstance(inner_item, Task):
+                for inner_item in item:
+                    if isinstance(inner_item, Task) and not inner_item.is_completed:
                         actual_tasks.append(inner_item)
-                        print(f"Debug: get_todoist_tasks (fallback): Appended Task from inner list: {inner_item.content[:50]}...") # Truncate for brevity
-                    else:
-                        print(f"Debug: get_todoist_tasks (fallback): Inner item {inner_item_index+1} in list {item_index+1} is type: {type(inner_item)}. Content: {str(inner_item)[:100]}")
-            else:
-                print(f"Debug: get_todoist_tasks (fallback): Item {item_index+1} type: {type(item)}. Content: {str(item)[:100]}")
-        
-        print(f"Debug: get_todoist_tasks (fallback): Extracted {len(actual_tasks)} Task objects after processing.")
-        if not actual_tasks:
-             print("Debug: get_todoist_tasks (fallback): No tasks found even in fallback after processing.")
-        return actual_tasks
 
-    except TodoistAPIException as e: 
-        print(f"Error: get_todoist_tasks (fallback): TodoistAPIException when fetching all tasks: {e}")
     except Exception as e:
-        print(f"Error: get_todoist_tasks (fallback): Failed to fetch all tasks: {e}")
-    
-    return []
+        print(f"Error fetching tasks from Todoist: {e}")
+        return []
+
+    print(f"Debug: get_todoist_tasks: Returning {len(actual_tasks)} active tasks due today.")
+    return actual_tasks
 
 def create_habitica_task_from_todoist(todoist_task_content: str, todoist_task_notes: str):
     """Creates a 'todo' in Habitica."""
@@ -284,11 +238,11 @@ def complete_todoist_task(api: TodoistAPI, todoist_task_id: str) -> bool:
         print(f"Generic error completing Todoist task ID {todoist_task_id}: {e}")
         return False
 
-def perform_single_sync_cycle(event=None, context=None): # Add event, context for GCF compatibility
+def perform_single_sync_cycle(event=None, context=None):
     """Performs one complete synchronization cycle from Todoist to Habitica and back."""
     
     # Initialize or load state
-    global todoist_to_habitica_map # Use global map for this cycle
+    global todoist_to_habitica_map
     todoist_to_habitica_map = {} 
     processed_completed_todoist_tasks, processed_completed_habitica_tasks = load_processed_state(STATE_FILE_PATH)
 
@@ -302,63 +256,30 @@ def perform_single_sync_cycle(event=None, context=None): # Add event, context fo
     todoist_api = TodoistAPI(TODOIST_API_KEY)
 
     print("Starting Todoist-Habitica single sync cycle...")
-    # Removed initial print statements about env vars for brevity in scheduled task logs
-    # If needed for debugging, they can be re-added.
-
-    # print("\n--- Running sync cycle ---") # Not needed for single run by scheduler
-    today_date = date.today()
+    
+    # Get today's date in EST timezone
+    est_now = datetime.now(TIMEZONE)
+    today_date = est_now.date()
     today_date_str = today_date.isoformat()
-    print(f"Filtering for tasks due on or before: {today_date_str}")
+    print(f"Filtering for tasks due on: {today_date_str} (EST)")
 
     # 1. FETCH DATA
-    all_todoist_tasks_from_api = get_todoist_tasks(todoist_api)
-    todoist_tasks_by_id_map = {task.id: task for task in all_todoist_tasks_from_api if isinstance(task, Task)}
+    todoist_tasks_for_today = get_todoist_tasks(todoist_api)
+    todoist_tasks_by_id_map = {task.id: task for task in todoist_tasks_for_today if isinstance(task, Task)}
 
-    todoist_tasks_for_today: list[Task] = []
-    if all_todoist_tasks_from_api:
-        # ... (the existing logic for filtering todoist_tasks_for_today) ...
-        # This part remains unchanged:
-        print(f"Debug: main_sync_loop: Received {len(all_todoist_tasks_from_api)} tasks from get_todoist_tasks. Now filtering for due date...")
-        for task in all_todoist_tasks_from_api:
-            if not isinstance(task, Task):
-                print(f"Warning: main_sync_loop: Encountered non-Task object in list: {type(task)}. Content: {str(task)[:100]}")
-                continue
-            task_due_data = None
-            if hasattr(task, 'due') and task.due and hasattr(task.due, 'date') and task.due.date:
-                task_due_data = task.due.date
-            else:
-                # print(f"Debug: Skipping Todoist task '{task.content[:50]}...' (ID: {task.id}). No valid task.due.date found.") # Reduced verbosity
-                continue
-            task_due_date_obj = None
-            if isinstance(task_due_data, str):
-                try:
-                    task_due_date_obj = datetime.strptime(task_due_data, "%Y-%m-%d").date()
-                except ValueError as ve:
-                    # print(f"Warning: Skipping Todoist task '{task.content[:50]}...' (ID: {task.id}). Invalid due date string format '{task_due_data}': {ve}") # Reduced verbosity
-                    continue
-            elif isinstance(task_due_data, date):
-                task_due_date_obj = task_due_data
-            else:
-                # print(f"Warning: Skipping Todoist task '{task.content[:50]}...' (ID: {task.id}). task.due.date is of unexpected type: {type(task_due_data)}.") # Reduced verbosity
-                continue
-            if task_due_date_obj <= today_date:
-                # print(f"Debug: Adding Todoist task '{task.content[:50]}...' (ID: {task.id}), due: {task_due_date_obj.isoformat()}") # Reduced verbosity
-                todoist_tasks_for_today.append(task)
-            # else:
-                # print(f"Debug: Skipping Todoist task '{task.content[:50]}...' (ID: {task.id}), due: {task_due_date_obj.isoformat()} (after today)") # Reduced verbosity
-    # else:
-        # print("Debug: main_sync_loop: No tasks returned by get_todoist_tasks.") # Reduced verbosity
-
-    print(f"Found {len(todoist_tasks_for_today)} active Todoist tasks due today or overdue after client-side filtering.")
+    print(f"Found {len(todoist_tasks_for_today)} active Todoist tasks due today.")
     active_todoist_ids_today = {t.id for t in todoist_tasks_for_today}
 
     habitica_tasks = get_habitica_user_tasks()
 
+    # Check for and remove duplicate tasks
+    remove_duplicate_habitica_tasks(habitica_tasks)
+
+    # Add cleanup step for non-today tasks
+    cleanup_non_today_habitica_tasks(habitica_tasks, todoist_tasks_for_today)
+
     # 2. RECONCILE todoist_to_habitica_map WITH HABITICA TAGS
-    # ... (existing logic for reconciliation, no changes needed here structurally) ...
-    # This part remains unchanged:
     habitica_ids_with_valid_tags = set()
-    # print(f"Debug: Reconciling todoist_to_habitica_map (current size: {len(todoist_to_habitica_map)}) with Habitica tags...") # Reduced verbosity
     for ht in habitica_tasks:
         if ht.get('type') == 'todo' and ht.get('notes') and '[TodoistID:' in ht['notes']:
             try:
@@ -367,21 +288,15 @@ def perform_single_sync_cycle(event=None, context=None): # Add event, context fo
                 if found_tid:
                     habitica_ids_with_valid_tags.add(found_hid)
                     if found_tid not in todoist_to_habitica_map:
-                        # print(f"Debug MAP-RECONCILE: Discovered new mapping from Habitica tag: T:{found_tid} -> H:{found_hid}. Adding to map.") # Reduced verbosity
                         todoist_to_habitica_map[found_tid] = found_hid
                     elif todoist_to_habitica_map[found_tid] != found_hid:
                         print(f"Warning MAP-RECONCILE: Mismatch for Todoist ID {found_tid}. Map had H:{todoist_to_habitica_map[found_tid]}, Habitica tag has H:{found_hid}. Updating map to Habitica tag's version.")
                         todoist_to_habitica_map[found_tid] = found_hid
             except IndexError:
                 print(f"Warning MAP-RECONCILE: Could not parse Todoist ID from Habitica task notes: {ht.get('text')}")
-    # print(f"Debug: todoist_to_habitica_map size after reconciliation: {len(todoist_to_habitica_map)}") # Reduced verbosity
 
     # --- Combined T->H Sync: Process mapped tasks for completion, rescheduling, or deletion --- 
-    # ... (existing logic for combined T->H sync, no changes needed here structurally) ...
-    # This part remains unchanged:
-    # print("Debug T->H SYNC (Combined): Processing mapped tasks based on current Todoist status...") # Reduced verbosity
     ids_to_remove_from_map_after_combined_TH_sync = set()
-    due_today_or_overdue_actual_ids = {t.id for t in todoist_tasks_for_today} 
     for todoist_id, habitica_id in list(todoist_to_habitica_map.items()):
         current_todoist_task_obj = todoist_tasks_by_id_map.get(todoist_id)
         if current_todoist_task_obj:
@@ -395,40 +310,33 @@ def perform_single_sync_cycle(event=None, context=None): # Add event, context fo
                         print(f"Failed to complete Habitica task {habitica_id} for T->H sync of TID:{todoist_id}")
                     ids_to_remove_from_map_after_combined_TH_sync.add(todoist_id)
             else:
-                is_task_still_due_today = todoist_id in due_today_or_overdue_actual_ids
+                is_task_still_due_today = todoist_id in active_todoist_ids_today
                 if not is_task_still_due_today:
-                    print(f"Debug T->H SYNC: Todoist task '{current_todoist_task_obj.content[:30]}' (TID:{todoist_id}) is RESCHEDULED (not completed, not due). Deleting H:{habitica_id}.")
+                    print(f"Debug T->H SYNC: Todoist task '{current_todoist_task_obj.content[:30]}' (TID:{todoist_id}) is not due today. Deleting H:{habitica_id}.")
                     if delete_habitica_task(habitica_id):
-                        processed_completed_habitica_tasks.add(habitica_id) 
+                        pass
                     else:
                         print(f"Failed to delete stale Habitica task {habitica_id} for TID:{todoist_id}")
                     ids_to_remove_from_map_after_combined_TH_sync.add(todoist_id)
         else:
             if todoist_id not in processed_completed_todoist_tasks:
-                print(f"Debug T->H SYNC: Todoist task (TID:{todoist_id}) from map not in API results (e.g. deleted/very old). Completing H:{habitica_id}.")
-                if complete_habitica_task(habitica_id): 
-                    processed_completed_todoist_tasks.add(todoist_id)
-                    processed_completed_habitica_tasks.add(habitica_id)
+                print(f"Debug T->H SYNC: Todoist task (TID:{todoist_id}) from map not in API results (e.g. deleted/very old). Deleting H:{habitica_id}.")
+                if delete_habitica_task(habitica_id): 
+                    pass
                 else:
-                    print(f"Failed to complete Habitica task {habitica_id} for disappeared TID:{todoist_id}")
+                    print(f"Failed to delete Habitica task {habitica_id} for disappeared TID:{todoist_id}")
                 ids_to_remove_from_map_after_combined_TH_sync.add(todoist_id)
     for tid_to_remove in ids_to_remove_from_map_after_combined_TH_sync:
         if tid_to_remove in todoist_to_habitica_map:
-            # print(f"Debug T->H SYNC: Removing TID {tid_to_remove} from map.") # Reduced verbosity
             del todoist_to_habitica_map[tid_to_remove]
 
     # 4. SYNC COMPLETIONS: HABITICA -> TODOIST
-    # ... (existing logic for H->T sync, no changes needed here structurally) ...
-    # This part remains unchanged:
-    # print("Debug H->T COMPLETION: Checking for Habitica tasks completed...") # Reduced verbosity
     ids_to_remove_from_map_after_H_T_sync = set()
     for h_task in habitica_tasks:
         h_id = h_task['id']
         h_text = h_task.get('text', 'Unknown Habitica Task')[:50]
         is_linked_via_tag = h_id in habitica_ids_with_valid_tags
         is_in_current_map_values = h_id in todoist_to_habitica_map.values()
-        # if is_linked_via_tag or is_in_current_map_values:  # Reduced verbosity
-            # print(f"Debug H->T CHECK: Habitica task '{h_text}...' (ID: {h_id}). API_Completed: {h_task.get('completed')}. Processed: {h_id in processed_completed_habitica_tasks}. LinkedByTag: {is_linked_via_tag}. InMapValues: {is_in_current_map_values}")
         if (is_linked_via_tag or is_in_current_map_values) and h_task.get('completed') and h_id not in processed_completed_habitica_tasks:
             corresponding_tid = None
             for t_id, mapped_h_id in todoist_to_habitica_map.items():
@@ -439,9 +347,8 @@ def perform_single_sync_cycle(event=None, context=None): # Add event, context fo
                 if '[TodoistID:' in h_task.get('notes', ''):
                     try:
                         corresponding_tid = h_task['notes'].split('[TodoistID:')[1].split(']')[0]
-                        # print(f"Debug H->T COMPLETION: Found corresponding_tid {corresponding_tid} via notes for H:{h_id} as it was not in map's keys.") # Reduced verbosity
                     except IndexError:
-                        pass 
+                        pass
             if corresponding_tid and corresponding_tid not in processed_completed_todoist_tasks:
                 print(f"Debug H->T COMPLETION: Habitica task '{h_text}...' (ID: {h_id}) is API_Completed: True. Corresponding Todoist ID: {corresponding_tid}.")
                 print(f"Attempting to complete Todoist task {corresponding_tid}...")
@@ -453,23 +360,18 @@ def perform_single_sync_cycle(event=None, context=None): # Add event, context fo
                 else:
                     print(f"Failed to complete Todoist task {corresponding_tid}.")
             elif corresponding_tid and corresponding_tid in processed_completed_todoist_tasks:
-                # print(f"Debug H->T COMPLETION: Habitica task '{h_text}...' (ID: {h_id}) is API_Completed: True, but Todoist task {corresponding_tid} was already processed. Marking Habitica task as processed.") # Reduced verbosity
                 processed_completed_habitica_tasks.add(h_id) 
             elif not corresponding_tid:
                  print(f"Debug H->T COMPLETION: Habitica task '{h_text}...' (ID: {h_id}) is API_Completed: True, but could not find its corresponding Todoist ID in map or notes. Marking as processed to avoid loops.")
                  processed_completed_habitica_tasks.add(h_id)
     for tid_to_remove in ids_to_remove_from_map_after_H_T_sync:
         if tid_to_remove in todoist_to_habitica_map: 
-            # print(f"Debug H->T COMPLETION: Removing completed Todoist task {tid_to_remove} (via Habitica completion) from map.") # Reduced verbosity
             del todoist_to_habitica_map[tid_to_remove]
 
     # 5. SYNC NEW TASKS: TODOIST -> HABITICA
-    # ... (existing logic for new task sync T->H, no changes needed here structurally) ...
-    # This part remains unchanged:
-    # print("Debug NEW TASK SYNC T->H: Checking for new Todoist tasks to sync to Habitica...") # Reduced verbosity
     for task in todoist_tasks_for_today: 
         if task.id not in todoist_to_habitica_map and not task.is_completed: 
-            print(f"New uncompleted Todoist task due today/overdue: '{task.content[:50]}...'. Creating in Habitica...")
+            print(f"New uncompleted Todoist task due today: '{task.content[:50]}...'. Creating in Habitica...")
             habitica_notes = f"{task.description if task.description else ''}\n\n[TodoistID:{task.id}]"
             created_habitica_task = create_habitica_task_from_todoist(task.content, habitica_notes)
             if created_habitica_task and created_habitica_task.get('id'):
@@ -478,8 +380,6 @@ def perform_single_sync_cycle(event=None, context=None): # Add event, context fo
                 print(f"Successfully created Habitica task for Todoist task '{task.content[:50]}...'. Mapped Todoist ID {task.id} to Habitica ID {new_hid}.")
             else:
                 print(f"Failed to create Habitica task for Todoist task '{task.content[:50]}...'. Response: {created_habitica_task}")
-        # elif task.id in todoist_to_habitica_map and not task.is_completed: # Reduced verbosity
-             # print(f"Todoist task '{task.content[:50]}...' (ID: {task.id}) already mapped (H_ID: {todoist_to_habitica_map.get(task.id)}) and not completed. No action for new sync.")
 
     print(f"Current todoist_to_habitica_map size at end of cycle: {len(todoist_to_habitica_map)}")
     print(f"Processed Todoist completions cache size: {len(processed_completed_todoist_tasks)}")
