@@ -423,7 +423,7 @@ def perform_single_sync_cycle(event=None, context=None):
             else:
                 is_task_still_due_today = todoist_id in due_today_or_overdue_actual_ids
                 if not is_task_still_due_today:
-                    print(f"Debug T->H SYNC: Todoist task '{current_todoist_task_obj.content[:30]}' (TID:{todoist_id}) is RESCHEDULED (not completed, not due). Deleting H:{habitica_id}.")
+                    print(f"Debug T->H SYNC: Todoist task '{current_todoist_task_obj.content[:30]}' (TID:{todoist_id}) is not due today. Deleting H:{habitica_id}.")
                     if delete_habitica_task(habitica_id):
                         processed_completed_habitica_tasks.add(habitica_id) 
                     else:
@@ -431,12 +431,12 @@ def perform_single_sync_cycle(event=None, context=None):
                     ids_to_remove_from_map_after_combined_TH_sync.add(todoist_id)
         else:
             if todoist_id not in processed_completed_todoist_tasks:
-                print(f"Debug T->H SYNC: Todoist task (TID:{todoist_id}) from map not in API results (e.g. deleted/very old). Completing H:{habitica_id}.")
-                if complete_habitica_task(habitica_id): 
+                print(f"Debug T->H SYNC: Todoist task (TID:{todoist_id}) from map not in API results (e.g. deleted/very old). Deleting H:{habitica_id}.")
+                if delete_habitica_task(habitica_id): 
                     processed_completed_todoist_tasks.add(todoist_id)
                     processed_completed_habitica_tasks.add(habitica_id)
                 else:
-                    print(f"Failed to complete Habitica task {habitica_id} for disappeared TID:{todoist_id}")
+                    print(f"Failed to delete Habitica task {habitica_id} for disappeared TID:{todoist_id}")
                 ids_to_remove_from_map_after_combined_TH_sync.add(todoist_id)
     for tid_to_remove in ids_to_remove_from_map_after_combined_TH_sync:
         if tid_to_remove in todoist_to_habitica_map:
