@@ -18,6 +18,7 @@ except ImportError:
 
 from todoist_api_python.models import Task # Ensuring Project is not imported
 from datetime import date, datetime
+import pytz  # Add pytz for timezone handling
 
 # --- Configuration ---
 TODOIST_API_KEY = os.environ.get("TODOIST_API_KEY")
@@ -25,6 +26,7 @@ HABITICA_API_USER = os.environ.get("HABITICA_API_USER")
 HABITICA_API_KEY = os.environ.get("HABITICA_API_KEY")
 HABITICA_API_URL = "https://habitica.com/api/v3"
 STATE_FILE_PATH = "/tmp/sync_state.json" # Or use os.path.join(tempfile.gettempdir(), "sync_state.json") for platform-agnostic temp path
+TIMEZONE = pytz.timezone('America/New_York')  # Set timezone to EST
 
 # --- State (these will be loaded/populated by functions) ---
 todoist_to_habitica_map = {} # Renamed from synced_tasks_map
@@ -66,7 +68,7 @@ def save_processed_state(file_path: str, p_todoist_tasks: set[str], p_habitica_t
 
 def get_todoist_tasks(api: TodoistAPI) -> list[Task]:
     """
-    Fetches tasks from Todoist that are due today.
+    Fetches tasks from Todoist that are due today in EST timezone.
     Attempts to get tasks due today using a filter if supported.
     Falls back to fetching all tasks if the filter fails or yields no results.
     Correctly processes items if they are lists containing Task objects.
@@ -74,8 +76,10 @@ def get_todoist_tasks(api: TodoistAPI) -> list[Task]:
     print("Debug: get_todoist_tasks: Initiating task fetch.")
     actual_tasks: list[Task] = []
 
-    # Get today's date in YYYY-MM-DD format
-    today = date.today().isoformat()
+    # Get today's date in EST timezone
+    est_now = datetime.now(TIMEZONE)
+    today = est_now.date().isoformat()
+    print(f"Debug: Using EST date for filtering: {today}")
 
     # Attempt 1: Use the filter for exact date match
     try:
@@ -88,7 +92,7 @@ def get_todoist_tasks(api: TodoistAPI) -> list[Task]:
         for item_index, item in enumerate(fetched_items):
             if isinstance(item, Task):
                 actual_tasks.append(item)
-            elif isinstance(item, list): # Handle if item is a list
+            elif isinstance(item, list):
                 print(f"Debug: get_todoist_tasks (filter attempt): Item {item_index+1} is a list. Processing inner items.")
                 for inner_item_index, inner_item in enumerate(item):
                     if isinstance(inner_item, Task):
@@ -119,7 +123,7 @@ def get_todoist_tasks(api: TodoistAPI) -> list[Task]:
     print("Debug: get_todoist_tasks: Falling back to fetching all tasks without API filter.")
     actual_tasks = []
     try:
-        all_tasks_response = api.get_tasks() # No filter
+        all_tasks_response = api.get_tasks()
         fetched_all_items = list(all_tasks_response) if all_tasks_response else []
 
         print(f"Debug: get_todoist_tasks (fallback): Received {len(fetched_all_items)} raw items from API.")
@@ -132,7 +136,7 @@ def get_todoist_tasks(api: TodoistAPI) -> list[Task]:
                 for inner_item_index, inner_item in enumerate(item):
                     if isinstance(inner_item, Task):
                         actual_tasks.append(inner_item)
-                        print(f"Debug: get_todoist_tasks (fallback): Appended Task from inner list: {inner_item.content[:50]}...") # Truncate for brevity
+                        print(f"Debug: get_todoist_tasks (fallback): Appended Task from inner list: {inner_item.content[:50]}...")
                     else:
                         print(f"Debug: get_todoist_tasks (fallback): Inner item {inner_item_index+1} in list {item_index+1} is type: {type(inner_item)}. Content: {str(inner_item)[:100]}")
             else:
@@ -309,9 +313,11 @@ def perform_single_sync_cycle(event=None, context=None): # Add event, context fo
     # If needed for debugging, they can be re-added.
 
     # print("\n--- Running sync cycle ---") # Not needed for single run by scheduler
-    today_date = date.today()
+    # Get today's date in EST timezone
+    est_now = datetime.now(TIMEZONE)
+    today_date = est_now.date()
     today_date_str = today_date.isoformat()
-    print(f"Filtering for tasks due on or before: {today_date_str}")
+    print(f"Filtering for tasks due on: {today_date_str} (EST)")
 
     # 1. FETCH DATA
     all_todoist_tasks_from_api = get_todoist_tasks(todoist_api)
@@ -339,12 +345,12 @@ def perform_single_sync_cycle(event=None, context=None): # Add event, context fo
                 task_due_date_obj = task_due_data
             else:
                 continue
-            # Strict equality check for today's date
+            # Strict equality check for today's date in EST
             if task_due_date_obj == today_date:
                 print(f"Debug: Adding Todoist task '{task.content[:50]}...' (ID: {task.id}), due: {task_due_date_obj.isoformat()}")
                 todoist_tasks_for_today.append(task)
             else:
-                print(f"Debug: Skipping Todoist task '{task.content[:50]}...' (ID: {task.id}), due: {task_due_date_obj.isoformat()} (not today)")
+                print(f"Debug: Skipping Todoist task '{task.content[:50]}...' (ID: {task.id}), due: {task_due_date_obj.isoformat()} (not today in EST)")
 
     print(f"Found {len(todoist_tasks_for_today)} active Todoist tasks due today after client-side filtering.")
     active_todoist_ids_today = {t.id for t in todoist_tasks_for_today}
