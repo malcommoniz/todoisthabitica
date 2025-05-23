@@ -1,0 +1,7 @@
+Flask
+psycopg2-binary
+Flask-SQLAlchemy
+SQLAlchemy
+todoist-api-python
+requests 
+functions-framework
