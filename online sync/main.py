@@ -291,11 +291,42 @@ def complete_todoist_task(api: TodoistAPI, todoist_task_id: str) -> bool:
         print(f"Generic error completing Todoist task ID {todoist_task_id}: {e}")
         return False
 
-def perform_single_sync_cycle(event=None, context=None): # Add event, context for GCF compatibility
+def cleanup_non_today_habitica_tasks(habitica_tasks: list, todoist_tasks_for_today: list[Task]) -> None:
+    """
+    Deletes Habitica tasks that are not due today in EST time.
+    Only affects tasks that were synced from Todoist (have TodoistID in notes).
+    """
+    print("\nStarting cleanup of non-today tasks from Habitica...")
+    today_est = datetime.now(TIMEZONE).date()
+    
+    # Create a set of Todoist IDs that are due today
+    today_todoist_ids = {task.id for task in todoist_tasks_for_today}
+    
+    for h_task in habitica_tasks:
+        if h_task.get('type') != 'todo':
+            continue
+            
+        notes = h_task.get('notes', '')
+        if '[TodoistID:' not in notes:
+            continue
+            
+        try:
+            todoist_id = notes.split('[TodoistID:')[1].split(']')[0]
+            if todoist_id not in today_todoist_ids:
+                print(f"Found Habitica task '{h_task.get('text', '')[:50]}...' that is not due today in EST. Deleting...")
+                if delete_habitica_task(h_task['id']):
+                    print(f"Successfully deleted non-today task from Habitica (Todoist ID: {todoist_id})")
+                else:
+                    print(f"Failed to delete non-today task from Habitica (Todoist ID: {todoist_id})")
+        except (IndexError, KeyError) as e:
+            print(f"Error processing Habitica task notes: {e}")
+            continue
+
+def perform_single_sync_cycle(event=None, context=None):
     """Performs one complete synchronization cycle from Todoist to Habitica and back."""
     
     # Initialize or load state
-    global todoist_to_habitica_map # Use global map for this cycle
+    global todoist_to_habitica_map
     todoist_to_habitica_map = {} 
     processed_completed_todoist_tasks, processed_completed_habitica_tasks = load_processed_state(STATE_FILE_PATH)
 
@@ -309,10 +340,7 @@ def perform_single_sync_cycle(event=None, context=None): # Add event, context fo
     todoist_api = TodoistAPI(TODOIST_API_KEY)
 
     print("Starting Todoist-Habitica single sync cycle...")
-    # Removed initial print statements about env vars for brevity in scheduled task logs
-    # If needed for debugging, they can be re-added.
-
-    # print("\n--- Running sync cycle ---") # Not needed for single run by scheduler
+    
     # Get today's date in EST timezone
     est_now = datetime.now(TIMEZONE)
     today_date = est_now.date()
@@ -357,11 +385,11 @@ def perform_single_sync_cycle(event=None, context=None): # Add event, context fo
 
     habitica_tasks = get_habitica_user_tasks()
 
+    # Add cleanup step for non-today tasks
+    cleanup_non_today_habitica_tasks(habitica_tasks, todoist_tasks_for_today)
+
     # 2. RECONCILE todoist_to_habitica_map WITH HABITICA TAGS
-    # ... (existing logic for reconciliation, no changes needed here structurally) ...
-    # This part remains unchanged:
     habitica_ids_with_valid_tags = set()
-    # print(f"Debug: Reconciling todoist_to_habitica_map (current size: {len(todoist_to_habitica_map)}) with Habitica tags...") # Reduced verbosity
     for ht in habitica_tasks:
         if ht.get('type') == 'todo' and ht.get('notes') and '[TodoistID:' in ht['notes']:
             try:
@@ -370,19 +398,14 @@ def perform_single_sync_cycle(event=None, context=None): # Add event, context fo
                 if found_tid:
                     habitica_ids_with_valid_tags.add(found_hid)
                     if found_tid not in todoist_to_habitica_map:
-                        # print(f"Debug MAP-RECONCILE: Discovered new mapping from Habitica tag: T:{found_tid} -> H:{found_hid}. Adding to map.") # Reduced verbosity
                         todoist_to_habitica_map[found_tid] = found_hid
                     elif todoist_to_habitica_map[found_tid] != found_hid:
                         print(f"Warning MAP-RECONCILE: Mismatch for Todoist ID {found_tid}. Map had H:{todoist_to_habitica_map[found_tid]}, Habitica tag has H:{found_hid}. Updating map to Habitica tag's version.")
                         todoist_to_habitica_map[found_tid] = found_hid
             except IndexError:
                 print(f"Warning MAP-RECONCILE: Could not parse Todoist ID from Habitica task notes: {ht.get('text')}")
-    # print(f"Debug: todoist_to_habitica_map size after reconciliation: {len(todoist_to_habitica_map)}") # Reduced verbosity
 
     # --- Combined T->H Sync: Process mapped tasks for completion, rescheduling, or deletion --- 
-    # ... (existing logic for combined T->H sync, no changes needed here structurally) ...
-    # This part remains unchanged:
-    # print("Debug T->H SYNC (Combined): Processing mapped tasks based on current Todoist status...") # Reduced verbosity
     ids_to_remove_from_map_after_combined_TH_sync = set()
     due_today_or_overdue_actual_ids = {t.id for t in todoist_tasks_for_today} 
     for todoist_id, habitica_id in list(todoist_to_habitica_map.items()):
@@ -417,21 +440,15 @@ def perform_single_sync_cycle(event=None, context=None): # Add event, context fo
                 ids_to_remove_from_map_after_combined_TH_sync.add(todoist_id)
     for tid_to_remove in ids_to_remove_from_map_after_combined_TH_sync:
         if tid_to_remove in todoist_to_habitica_map:
-            # print(f"Debug T->H SYNC: Removing TID {tid_to_remove} from map.") # Reduced verbosity
             del todoist_to_habitica_map[tid_to_remove]
 
     # 4. SYNC COMPLETIONS: HABITICA -> TODOIST
-    # ... (existing logic for H->T sync, no changes needed here structurally) ...
-    # This part remains unchanged:
-    # print("Debug H->T COMPLETION: Checking for Habitica tasks completed...") # Reduced verbosity
     ids_to_remove_from_map_after_H_T_sync = set()
     for h_task in habitica_tasks:
         h_id = h_task['id']
         h_text = h_task.get('text', 'Unknown Habitica Task')[:50]
         is_linked_via_tag = h_id in habitica_ids_with_valid_tags
         is_in_current_map_values = h_id in todoist_to_habitica_map.values()
-        # if is_linked_via_tag or is_in_current_map_values:  # Reduced verbosity
-            # print(f"Debug H->T CHECK: Habitica task '{h_text}...' (ID: {h_id}). API_Completed: {h_task.get('completed')}. Processed: {h_id in processed_completed_habitica_tasks}. LinkedByTag: {is_linked_via_tag}. InMapValues: {is_in_current_map_values}")
         if (is_linked_via_tag or is_in_current_map_values) and h_task.get('completed') and h_id not in processed_completed_habitica_tasks:
             corresponding_tid = None
             for t_id, mapped_h_id in todoist_to_habitica_map.items():
@@ -442,7 +459,6 @@ def perform_single_sync_cycle(event=None, context=None): # Add event, context fo
                 if '[TodoistID:' in h_task.get('notes', ''):
                     try:
                         corresponding_tid = h_task['notes'].split('[TodoistID:')[1].split(']')[0]
-                        # print(f"Debug H->T COMPLETION: Found corresponding_tid {corresponding_tid} via notes for H:{h_id} as it was not in map's keys.") # Reduced verbosity
                     except IndexError:
                         pass 
             if corresponding_tid and corresponding_tid not in processed_completed_todoist_tasks:
@@ -456,20 +472,15 @@ def perform_single_sync_cycle(event=None, context=None): # Add event, context fo
                 else:
                     print(f"Failed to complete Todoist task {corresponding_tid}.")
             elif corresponding_tid and corresponding_tid in processed_completed_todoist_tasks:
-                # print(f"Debug H->T COMPLETION: Habitica task '{h_text}...' (ID: {h_id}) is API_Completed: True, but Todoist task {corresponding_tid} was already processed. Marking Habitica task as processed.") # Reduced verbosity
                 processed_completed_habitica_tasks.add(h_id) 
             elif not corresponding_tid:
                  print(f"Debug H->T COMPLETION: Habitica task '{h_text}...' (ID: {h_id}) is API_Completed: True, but could not find its corresponding Todoist ID in map or notes. Marking as processed to avoid loops.")
                  processed_completed_habitica_tasks.add(h_id)
     for tid_to_remove in ids_to_remove_from_map_after_H_T_sync:
         if tid_to_remove in todoist_to_habitica_map: 
-            # print(f"Debug H->T COMPLETION: Removing completed Todoist task {tid_to_remove} (via Habitica completion) from map.") # Reduced verbosity
             del todoist_to_habitica_map[tid_to_remove]
 
     # 5. SYNC NEW TASKS: TODOIST -> HABITICA
-    # ... (existing logic for new task sync T->H, no changes needed here structurally) ...
-    # This part remains unchanged:
-    # print("Debug NEW TASK SYNC T->H: Checking for new Todoist tasks to sync to Habitica...") # Reduced verbosity
     for task in todoist_tasks_for_today: 
         if task.id not in todoist_to_habitica_map and not task.is_completed: 
             print(f"New uncompleted Todoist task due today/overdue: '{task.content[:50]}...'. Creating in Habitica...")
@@ -481,8 +492,6 @@ def perform_single_sync_cycle(event=None, context=None): # Add event, context fo
                 print(f"Successfully created Habitica task for Todoist task '{task.content[:50]}...'. Mapped Todoist ID {task.id} to Habitica ID {new_hid}.")
             else:
                 print(f"Failed to create Habitica task for Todoist task '{task.content[:50]}...'. Response: {created_habitica_task}")
-        # elif task.id in todoist_to_habitica_map and not task.is_completed: # Reduced verbosity
-             # print(f"Todoist task '{task.content[:50]}...' (ID: {task.id}) already mapped (H_ID: {todoist_to_habitica_map.get(task.id)}) and not completed. No action for new sync.")
 
     print(f"Current todoist_to_habitica_map size at end of cycle: {len(todoist_to_habitica_map)}")
     print(f"Processed Todoist completions cache size: {len(processed_completed_todoist_tasks)}")
