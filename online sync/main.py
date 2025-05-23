@@ -322,6 +322,50 @@ def cleanup_non_today_habitica_tasks(habitica_tasks: list, todoist_tasks_for_tod
             print(f"Error processing Habitica task notes: {e}")
             continue
 
+def remove_duplicate_habitica_tasks(habitica_tasks: list) -> None:
+    """
+    Removes duplicate tasks from Habitica by checking Todoist IDs in task notes.
+    Keeps the most recently created task and deletes others.
+    """
+    print("\nChecking for duplicate tasks in Habitica...")
+    
+    # Dictionary to store Todoist ID -> list of Habitica tasks
+    todoist_id_to_habitica_tasks = {}
+    
+    # First, collect all tasks with Todoist IDs
+    for h_task in habitica_tasks:
+        if h_task.get('type') != 'todo':
+            continue
+            
+        notes = h_task.get('notes', '')
+        if '[TodoistID:' not in notes:
+            continue
+            
+        try:
+            todoist_id = notes.split('[TodoistID:')[1].split(']')[0]
+            if todoist_id not in todoist_id_to_habitica_tasks:
+                todoist_id_to_habitica_tasks[todoist_id] = []
+            todoist_id_to_habitica_tasks[todoist_id].append(h_task)
+        except (IndexError, KeyError) as e:
+            print(f"Error processing Habitica task notes: {e}")
+            continue
+    
+    # Now check for duplicates and remove them
+    for todoist_id, h_tasks in todoist_id_to_habitica_tasks.items():
+        if len(h_tasks) > 1:
+            print(f"Found {len(h_tasks)} duplicate tasks for Todoist ID {todoist_id}")
+            
+            # Sort tasks by creation date (newest first)
+            sorted_tasks = sorted(h_tasks, key=lambda x: x.get('createdAt', ''), reverse=True)
+            
+            # Keep the newest task, delete the rest
+            for task in sorted_tasks[1:]:
+                print(f"Deleting duplicate Habitica task '{task.get('text', '')[:50]}...' (ID: {task['id']})")
+                if delete_habitica_task(task['id']):
+                    print(f"Successfully deleted duplicate task (Todoist ID: {todoist_id})")
+                else:
+                    print(f"Failed to delete duplicate task (Todoist ID: {todoist_id})")
+
 def perform_single_sync_cycle(event=None, context=None):
     """Performs one complete synchronization cycle from Todoist to Habitica and back."""
     
@@ -384,6 +428,9 @@ def perform_single_sync_cycle(event=None, context=None):
     active_todoist_ids_today = {t.id for t in todoist_tasks_for_today}
 
     habitica_tasks = get_habitica_user_tasks()
+
+    # Check for and remove duplicate tasks
+    remove_duplicate_habitica_tasks(habitica_tasks)
 
     # Add cleanup step for non-today tasks
     cleanup_non_today_habitica_tasks(habitica_tasks, todoist_tasks_for_today)
