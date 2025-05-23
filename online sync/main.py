@@ -74,10 +74,13 @@ def get_todoist_tasks(api: TodoistAPI) -> list[Task]:
     print("Debug: get_todoist_tasks: Initiating task fetch.")
     actual_tasks: list[Task] = []
 
-    # Attempt 1: Use the filter for "today"
+    # Get today's date in YYYY-MM-DD format
+    today = date.today().isoformat()
+
+    # Attempt 1: Use the filter for exact date match
     try:
-        print("Debug: get_todoist_tasks: Attempting fetch with filter='today'")
-        tasks_response = api.get_tasks(filter="today")
+        print(f"Debug: get_todoist_tasks: Attempting fetch with filter='due: {today}'")
+        tasks_response = api.get_tasks(filter=f"due: {today}")
         fetched_items = list(tasks_response) if tasks_response else []
         
         print(f"Debug: get_todoist_tasks (filter attempt): Received {len(fetched_items)} raw items from API.")
@@ -100,7 +103,7 @@ def get_todoist_tasks(api: TodoistAPI) -> list[Task]:
             print(f"Debug: get_todoist_tasks: Successfully fetched {len(actual_tasks)} tasks using filter (or processed list structure).")
             return actual_tasks
         else:
-            print("Debug: get_todoist_tasks (filter attempt): Filter 'today' (or list processing) yielded no tasks. Will try fallback if filter was the cause.")
+            print("Debug: get_todoist_tasks (filter attempt): Filter 'due: {today}' (or list processing) yielded no tasks. Will try fallback if filter was the cause.")
 
     except TypeError as e:
         if "unexpected keyword argument 'filter'" in str(e):
@@ -108,7 +111,7 @@ def get_todoist_tasks(api: TodoistAPI) -> list[Task]:
         else:
             print(f"Warning: get_todoist_tasks: TypeError during filtered fetch: {e}")
     except TodoistAPIException as e:
-        print(f"Warning: get_todoist_tasks: TodoistAPIException with filter='today': {e}")
+        print(f"Warning: get_todoist_tasks: TodoistAPIException with filter='due: {today}': {e}")
     except Exception as e:
         print(f"Warning: get_todoist_tasks: Unexpected error during filtered fetch: {e}")
 
@@ -336,8 +339,12 @@ def perform_single_sync_cycle(event=None, context=None): # Add event, context fo
                 task_due_date_obj = task_due_data
             else:
                 continue
-            if task_due_date_obj == today_date:  # Only include tasks due today, not overdue
+            # Strict equality check for today's date
+            if task_due_date_obj == today_date:
+                print(f"Debug: Adding Todoist task '{task.content[:50]}...' (ID: {task.id}), due: {task_due_date_obj.isoformat()}")
                 todoist_tasks_for_today.append(task)
+            else:
+                print(f"Debug: Skipping Todoist task '{task.content[:50]}...' (ID: {task.id}), due: {task_due_date_obj.isoformat()} (not today)")
 
     print(f"Found {len(todoist_tasks_for_today)} active Todoist tasks due today after client-side filtering.")
     active_todoist_ids_today = {t.id for t in todoist_tasks_for_today}
