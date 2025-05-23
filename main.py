@@ -1,3 +1,4 @@
+import pytz
 import os
 import time
 import requests
@@ -306,8 +307,8 @@ def perform_single_sync_cycle(event=None, context=None): # Add event, context fo
     # If needed for debugging, they can be re-added.
 
     # print("\n--- Running sync cycle ---") # Not needed for single run by scheduler
-    today_date = date.today()
-    today_date_str = today_date.isoformat()
+    local_tz = pytz.timezone('US/Eastern')
+   today_date = datetime.now(local_tz).date()
     print(f"Filtering for tasks due on or before: {today_date_str}")
 
     # 1. FETCH DATA
