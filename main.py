@@ -85,19 +85,10 @@ def get_todoist_tasks(api_token):
         # Create a set of completed task IDs
         completed_task_ids = {task['task_id'] for task in completed_tasks.get('items', [])}
 
-        # Get all tasks (not just today's) to check for rescheduled tasks
-        all_tasks = requests.get(
-            "https://api.todoist.com/rest/v2/tasks",
-            headers={"Authorization": f"Bearer {api_token}"}
-        ).json()
-
-        # Create a mapping of task content to task ID for all tasks
-        all_tasks_map = {task['content']: task['id'] for task in all_tasks}
-
-        return active_tasks, completed_task_ids, all_tasks_map
+        return active_tasks, completed_task_ids
     except Exception as e:
         print(f"Error fetching Todoist tasks: {e}")
-        return [], set(), {}
+        return [], set()
 
 def create_habitica_task_from_todoist(todoist_task_content: str, todoist_task_notes: str):
     """Creates a 'todo' in Habitica."""
@@ -240,21 +231,17 @@ def perform_single_sync_cycle(event=None, context=None):
     """Perform a single sync cycle between Todoist and Habitica."""
     try:
         # Get tasks from both systems
-        todoist_tasks, completed_todoist_ids, all_todoist_tasks = get_todoist_tasks(TODOIST_API_KEY)
+        todoist_tasks, completed_todoist_ids = get_todoist_tasks(TODOIST_API_KEY)
         habitica_tasks = get_habitica_user_tasks()
 
         # Create a mapping of task names to their IDs for both systems
         todoist_task_map = {task['content']: task['id'] for task in todoist_tasks}
         habitica_task_map = {task['text']: task['id'] for task in habitica_tasks}
 
-        # Track which tasks we've processed
-        processed_tasks = set()
-
         # First, handle tasks that exist in both systems
         for task_name, todoist_id in todoist_task_map.items():
             if task_name in habitica_task_map:
                 habitica_id = habitica_task_map[task_name]
-                processed_tasks.add(task_name)
                 
                 # Only mark as complete if explicitly completed in Todoist
                 if todoist_id in completed_todoist_ids:
@@ -265,27 +252,14 @@ def perform_single_sync_cycle(event=None, context=None):
 
         # Then, handle tasks that only exist in Habitica
         for task_name, habitica_id in habitica_task_map.items():
-            if task_name not in processed_tasks:
-                # Check if this task exists in Todoist (might be rescheduled)
-                todoist_id = all_todoist_tasks.get(task_name)
-                
-                if todoist_id:
-                    if todoist_id in completed_todoist_ids:
-                        # Task was actually completed - mark as complete in Habitica
-                        complete_habitica_task(habitica_id)
-                    else:
-                        # Task exists but is not due today - delete from Habitica
-                        delete_habitica_task(habitica_id)
-                else:
-                    # Task doesn't exist in Todoist anymore - delete from Habitica
-                    delete_habitica_task(habitica_id)
+            if task_name not in todoist_task_map:
+                # Delete from Habitica if not in Todoist's today list
+                delete_habitica_task(habitica_id)
 
         # Finally, add any new tasks from Todoist to Habitica
         for task_name, todoist_id in todoist_task_map.items():
-            if task_name not in processed_tasks and todoist_id not in completed_todoist_ids:
-                # Check if this task already exists in Habitica (might have been rescheduled)
-                if task_name not in habitica_task_map:
-                    create_habitica_task_from_todoist(task_name, f"[TodoistID:{todoist_id}]")
+            if task_name not in habitica_task_map and todoist_id not in completed_todoist_ids:
+                create_habitica_task_from_todoist(task_name, f"[TodoistID:{todoist_id}]")
 
         print("Sync cycle completed successfully")
         return True
