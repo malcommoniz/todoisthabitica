@@ -18,6 +18,7 @@ except ImportError:
 
 from todoist_api_python.models import Task # Ensuring Project is not imported
 from datetime import date, datetime, TIMEZONE
+from flask import Flask, request
 
 # --- Configuration ---
 TODOIST_API_KEY = os.environ.get("TODOIST_API_KEY")
@@ -281,11 +282,21 @@ def perform_single_sync_cycle(event=None, context=None):
         print(f"Error during sync cycle: {e}")
         return False
 
+app = Flask(__name__)
+
+@app.route('/', methods=['GET'])
+def home():
+    return "Todoist-Habitica Sync Service is running"
+
+@app.route('/sync', methods=['POST'])
+def sync():
+    try:
+        perform_single_sync_cycle()
+        return "Sync completed successfully", 200
+    except Exception as e:
+        return f"Error during sync: {str(e)}", 500
 
 if __name__ == "__main__":
-    # This script is now designed to be called by a scheduler.
-    # When run directly, it will perform one sync cycle.
-    
-    # For Google Cloud Functions, the entry point will be perform_single_sync_cycle(event, context)
-    # For local testing:
-    perform_single_sync_cycle() 
+    # Get port from environment variable (required for Cloud Run)
+    port = int(os.environ.get("PORT", 8080))
+    app.run(host='0.0.0.0', port=port) 
