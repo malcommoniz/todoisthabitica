@@ -19,6 +19,8 @@ except ImportError:
 from todoist_api_python.models import Task # Ensuring Project is not imported
 from datetime import date, datetime
 import pytz
+import traceback
+
 TIMEZONE = pytz.timezone('America/New_York')
 
 # --- Configuration ---
@@ -295,7 +297,8 @@ def perform_single_sync_cycle(event=None, context=None):
         return True
 
     except Exception as e:
-        print(f"Error during sync cycle: {e}")
+        print("ERROR: Exception in perform_single_sync_cycle")
+        print(traceback.format_exc())
         return False
 
 
