@@ -247,8 +247,10 @@ def perform_single_sync_cycle(event=None, context=None):
         habitica_tasks = get_habitica_user_tasks()
 
         # Create mappings for Todoist tasks
-        todoist_id_to_task = {task['id']: task for task in todoist_tasks}
+        todoist_id_to_task = {str(task['id']): task for task in todoist_tasks}
         todoist_today_ids = set(todoist_id_to_task.keys())
+        completed_todoist_ids = set(str(tid) for tid in completed_todoist_ids)
+        valid_todoist_ids = todoist_today_ids | completed_todoist_ids
 
         # Process Habitica tasks
         for habitica_task in habitica_tasks:
@@ -259,19 +261,15 @@ def perform_single_sync_cycle(event=None, context=None):
                 if todoist_id in todoist_today_ids:
                     # Task exists in Todoist's today list
                     if todoist_id in completed_todoist_ids:
-                        # Task is completed in Todoist - mark as complete in Habitica
                         complete_habitica_task(habitica_id)
                     else:
-                        # Task is active in Todoist - ensure not completed in Habitica
                         uncomplete_habitica_task(habitica_id)
+                elif todoist_id in completed_todoist_ids:
+                    # Task was completed in Todoist - mark as complete in Habitica
+                    complete_habitica_task(habitica_id)
                 else:
-                    # Task is not in Todoist's today list
-                    if todoist_id in completed_todoist_ids:
-                        # Task was completed in Todoist - mark as complete in Habitica
-                        complete_habitica_task(habitica_id)
-                    else:
-                        # Task was removed from today and not completed - delete from Habitica
-                        delete_habitica_task(habitica_id)
+                    # Task is not in today or completed - delete from Habitica
+                    delete_habitica_task(habitica_id)
             else:
                 # No Todoist ID found - delete from Habitica
                 delete_habitica_task(habitica_id)
@@ -286,7 +284,6 @@ def perform_single_sync_cycle(event=None, context=None):
                     break
 
             if not task_exists and todoist_id not in completed_todoist_ids:
-                # Create new task in Habitica
                 create_habitica_task_from_todoist(
                     todoist_task['content'],
                     f"[TodoistID:{todoist_id}]"
