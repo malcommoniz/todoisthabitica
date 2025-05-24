@@ -231,6 +231,27 @@ def complete_todoist_task(api: TodoistAPI, todoist_task_id: str) -> bool:
         print(f"Generic error completing Todoist task ID {todoist_task_id}: {e}")
         return False
 
+def uncomplete_habitica_task(habitica_task_id: str) -> bool:
+    """Uncompletes a task in Habitica."""
+    if not HABITICA_API_USER or not HABITICA_API_KEY:
+        print("Habitica API credentials not set.")
+        return False
+
+    headers = {
+        "x-api-user": HABITICA_API_USER,
+        "x-api-key": HABITICA_API_KEY
+    }
+    try:
+        response = requests.post(f"{HABITICA_API_URL}/tasks/{habitica_task_id}/unlink", headers=headers)
+        response.raise_for_status()
+        print(f"Successfully uncompleted Habitica task {habitica_task_id}")
+        return True
+    except requests.exceptions.RequestException as e:
+        print(f"Error uncompleting Habitica task {habitica_task_id}: {e}")
+        if e.response is not None:
+            print(f"Habitica API Response: {e.response.text}")
+        return False
+
 def perform_single_sync_cycle(event=None, context=None):
     """Perform a single sync cycle between Todoist and Habitica."""
     try:
@@ -299,4 +320,5 @@ def sync():
 if __name__ == "__main__":
     # Get port from environment variable (required for Cloud Run)
     port = int(os.environ.get("PORT", 8080))
-    app.run(host='0.0.0.0', port=port) 
+    # Ensure we're binding to 0.0.0.0 for Cloud Run
+    app.run(host='0.0.0.0', port=port, debug=False) 
