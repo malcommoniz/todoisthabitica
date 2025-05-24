@@ -317,8 +317,8 @@ def sync():
     except Exception as e:
         return f"Error during sync: {str(e)}", 500
 
-if __name__ == "__main__":
-    # Get port from environment variable (required for Cloud Run)
-    port = int(os.environ.get("PORT", 8080))
-    # Ensure we're binding to 0.0.0.0 for Cloud Run
-    app.run(host='0.0.0.0', port=port, debug=False) 
+# if __name__ == "__main__":
+#     # Get port from environment variable (required for Cloud Run)
+#     port = int(os.environ.get("PORT", 8080))
+#     # Ensure we're binding to 0.0.0.0 for Cloud Run
+#     app.run(host='0.0.0.0', port=port, debug=False) 
