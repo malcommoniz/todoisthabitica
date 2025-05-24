@@ -2,6 +2,7 @@ import os
 import time
 import requests
 import json
+import pytz
 from todoist_api_python.api import TodoistAPI
 # Try importing TodoistAPIException from common locations
 try:
@@ -17,7 +18,7 @@ except ImportError:
             TodoistAPIException = Exception # Fallback to general Exception
 
 from todoist_api_python.models import Task # Ensuring Project is not imported
-from datetime import date, datetime, TIMEZONE
+from datetime import date, datetime
 from flask import Flask, request
 
 # --- Configuration ---
@@ -26,6 +27,7 @@ HABITICA_API_USER = os.environ.get("HABITICA_API_USER")
 HABITICA_API_KEY = os.environ.get("HABITICA_API_KEY")
 HABITICA_API_URL = "https://habitica.com/api/v3"
 STATE_FILE_PATH = "/tmp/sync_state.json" # Or use os.path.join(tempfile.gettempdir(), "sync_state.json") for platform-agnostic temp path
+EST = pytz.timezone('America/New_York') # Defined EST timezone
 
 # --- State (these will be loaded/populated by functions) ---
 todoist_to_habitica_map = {} # Renamed from synced_tasks_map
@@ -76,11 +78,12 @@ def get_todoist_tasks(api_token):
         ).json()
 
         # Get completed tasks from today
-        today = datetime.now(TIMEZONE).strftime("%Y-%m-%d")
+        today_dt = datetime.now(EST) # Use EST
+        today_str = today_dt.strftime("%Y-%m-%d")
         completed_tasks = requests.get(
             "https://api.todoist.com/rest/v2/completed/get_all",
             headers={"Authorization": f"Bearer {api_token}"},
-            params={"since": today}
+            params={"since": today_str} # Use formatted string
         ).json()
 
         # Create a set of completed task IDs
