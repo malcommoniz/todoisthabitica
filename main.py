@@ -17,11 +17,7 @@ except ImportError:
             TodoistAPIException = Exception # Fallback to general Exception
 
 from todoist_api_python.models import Task # Ensuring Project is not imported
-from datetime import date, datetime
-import pytz
-import traceback
-
-TIMEZONE = pytz.timezone('America/New_York')
+from datetime import date, datetime, TIMEZONE
 
 # --- Configuration ---
 TODOIST_API_KEY = os.environ.get("TODOIST_API_KEY")
@@ -89,22 +85,13 @@ def get_todoist_tasks(api_token):
         # Create a set of completed task IDs
         completed_task_ids = {task['task_id'] for task in completed_tasks.get('items', [])}
 
+        # Filter out completed tasks from active tasks
+        active_tasks = [task for task in active_tasks if task['id'] not in completed_task_ids]
+
         return active_tasks, completed_task_ids
     except Exception as e:
         print(f"Error fetching Todoist tasks: {e}")
         return [], set()
-
-def extract_todoist_id_from_notes(notes):
-    """Extract Todoist ID from Habitica task notes."""
-    if not notes:
-        return None
-    try:
-        # Look for [TodoistID:123] pattern
-        if '[TodoistID:' in notes:
-            return notes.split('[TodoistID:')[1].split(']')[0]
-    except:
-        pass
-    return None
 
 def create_habitica_task_from_todoist(todoist_task_content: str, todoist_task_notes: str):
     """Creates a 'todo' in Habitica."""
@@ -250,55 +237,48 @@ def perform_single_sync_cycle(event=None, context=None):
         todoist_tasks, completed_todoist_ids = get_todoist_tasks(TODOIST_API_KEY)
         habitica_tasks = get_habitica_user_tasks()
 
-        # Create mappings for Todoist tasks
-        todoist_id_to_task = {str(task['id']): task for task in todoist_tasks}
-        todoist_today_ids = set(todoist_id_to_task.keys())
-        completed_todoist_ids = set(str(tid) for tid in completed_todoist_ids)
-        valid_todoist_ids = todoist_today_ids | completed_todoist_ids
+        # Create a mapping of task names to their IDs for both systems
+        todoist_task_map = {task['content']: task['id'] for task in todoist_tasks}
+        habitica_task_map = {task['text']: task['id'] for task in habitica_tasks}
 
-        # Process Habitica tasks
-        for habitica_task in habitica_tasks:
-            habitica_id = habitica_task['id']
-            todoist_id = extract_todoist_id_from_notes(habitica_task.get('notes', ''))
+        # Track which tasks we've processed
+        processed_tasks = set()
 
-            if todoist_id:
-                if todoist_id in todoist_today_ids:
-                    # Task exists in Todoist's today list
-                    if todoist_id in completed_todoist_ids:
-                        complete_habitica_task(habitica_id)
-                    else:
-                        uncomplete_habitica_task(habitica_id)
-                elif todoist_id in completed_todoist_ids:
-                    # Task was completed in Todoist - mark as complete in Habitica
+        # First, handle tasks that exist in both systems
+        for task_name, todoist_id in todoist_task_map.items():
+            if task_name in habitica_task_map:
+                habitica_id = habitica_task_map[task_name]
+                processed_tasks.add(task_name)
+                
+                # Check if the task was completed in Todoist
+                if todoist_id in completed_todoist_ids:
+                    # Mark as complete in Habitica
                     complete_habitica_task(habitica_id)
                 else:
-                    # Task is not in today or completed - delete from Habitica
+                    # Ensure task is not completed in Habitica
+                    uncomplete_habitica_task(habitica_id)
+
+        # Then, handle tasks that only exist in Habitica
+        for task_name, habitica_id in habitica_task_map.items():
+            if task_name not in processed_tasks:
+                # Check if this task was completed in Todoist
+                if any(task_name in todoist_task_map and todoist_task_map[task_name] in completed_todoist_ids):
+                    # Mark as complete in Habitica
+                    complete_habitica_task(habitica_id)
+                else:
+                    # Delete from Habitica if it's not in Todoist and wasn't completed
                     delete_habitica_task(habitica_id)
-            else:
-                # No Todoist ID found - delete from Habitica
-                delete_habitica_task(habitica_id)
 
-        # Add new tasks from Todoist to Habitica
-        for todoist_id, todoist_task in todoist_id_to_task.items():
-            # Check if this task already exists in Habitica
-            task_exists = False
-            for habitica_task in habitica_tasks:
-                if extract_todoist_id_from_notes(habitica_task.get('notes', '')) == todoist_id:
-                    task_exists = True
-                    break
-
-            if not task_exists and todoist_id not in completed_todoist_ids:
-                create_habitica_task_from_todoist(
-                    todoist_task['content'],
-                    f"[TodoistID:{todoist_id}]"
-                )
+        # Finally, add any new tasks from Todoist to Habitica
+        for task_name, todoist_id in todoist_task_map.items():
+            if task_name not in processed_tasks and todoist_id not in completed_todoist_ids:
+                create_habitica_task_from_todoist(task_name, f"[TodoistID:{todoist_id}]")
 
         print("Sync cycle completed successfully")
         return True
 
     except Exception as e:
-        print("ERROR: Exception in perform_single_sync_cycle")
-        print(traceback.format_exc())
+        print(f"Error during sync cycle: {e}")
         return False
 
 

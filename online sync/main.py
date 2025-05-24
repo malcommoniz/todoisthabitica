@@ -385,7 +385,7 @@ def perform_single_sync_cycle(event=None, context=None):
     todoist_api = TodoistAPI(TODOIST_API_KEY)
 
     print("Starting Todoist-Habitica single sync cycle...")
-    
+
     # Get today's date in EST timezone
     est_now = datetime.now(TIMEZONE)
     today_date = est_now.date()
