@@ -17,7 +17,9 @@ except ImportError:
             TodoistAPIException = Exception # Fallback to general Exception
 
 from todoist_api_python.models import Task # Ensuring Project is not imported
-from datetime import date, datetime, TIMEZONE
+from datetime import date, datetime
+import pytz
+TIMEZONE = pytz.timezone('America/New_York')
 
 # --- Configuration ---
 TODOIST_API_KEY = os.environ.get("TODOIST_API_KEY")
